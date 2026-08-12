@@ -2,6 +2,7 @@ import argparse
 import csv
 import json
 import random
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,6 +17,58 @@ from ultralytics.utils import yaml_load, yaml_save
 
 
 SAMPLE_IOU_THRESHOLDS = (0.5, 0.6, 0.7, 0.8, 0.9)
+SPATIAL_WORDS = {
+    "above",
+    "adjacent",
+    "around",
+    "atop",
+    "below",
+    "beside",
+    "between",
+    "bottom",
+    "center",
+    "central",
+    "centre",
+    "east",
+    "eastern",
+    "inside",
+    "left",
+    "lower",
+    "middle",
+    "near",
+    "north",
+    "northern",
+    "outside",
+    "right",
+    "south",
+    "southern",
+    "top",
+    "upper",
+    "west",
+    "western",
+}
+OBJECT_ALIASES = {
+    "airplane": ("airplane", "plane", "aircraft"),
+    "airport": ("airport",),
+    "baseballfield": ("baseball", "field"),
+    "basketballcourt": ("basketball", "court"),
+    "bridge": ("bridge",),
+    "chimney": ("chimney",),
+    "dam": ("dam",),
+    "expressway-service-area": ("expressway", "service", "area"),
+    "expressway-toll-station": ("expressway", "toll", "station"),
+    "golffield": ("golf", "field"),
+    "groundtrackfield": ("ground", "track", "field"),
+    "harbor": ("harbor", "harbour"),
+    "overpass": ("overpass",),
+    "ship": ("ship",),
+    "stadium": ("stadium",),
+    "storagetank": ("storage", "tank"),
+    "tenniscourt": ("tennis", "court"),
+    "trainstation": ("train", "station"),
+    "vehicle": ("vehicle", "car", "truck"),
+    "windmill": ("windmill",),
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -220,7 +273,15 @@ def predict_with_optional_text(
         text_embedding = batch.get("text_embedding", None)
         if text_embedding is None and prompt_embeddings is not None and class_idx is not None:
             text_embedding = prompt_embeddings[class_idx]
-        return model(batch["img"], class_idx=class_idx, text_embedding=text_embedding)
+        return model(
+            batch["img"],
+            class_idx=class_idx,
+            text_embedding=text_embedding,
+            text_token_mask=batch.get("text_token_mask"),
+            text_object_mask=batch.get("text_object_mask"),
+            text_spatial_mask=batch.get("text_spatial_mask"),
+            text_context_mask=batch.get("text_context_mask"),
+        )
     return model(batch["img"])
 
 
@@ -242,6 +303,57 @@ def class_prompts(data: Dict[str, Any], names: List[str]) -> List[str]:
 
 def dataset_type(data: Dict[str, Any]) -> str:
     return str(data.get("dataset_type", "rrsisd_refseg") or "rrsisd_refseg").strip().lower()
+
+
+def _words_for_token_masks(text: str) -> List[str]:
+    return re.findall(r"[A-Za-z]+", str(text).lower())
+
+
+def _category_aliases(row: Dict[str, Any]) -> set[str]:
+    names = {
+        str(row.get("category_name", "")).strip().lower(),
+        str(row.get("class_name", "")).strip().lower(),
+    }
+    aliases: set[str] = set()
+    for name in names:
+        compact = re.sub(r"[^a-z]+", "", name)
+        hyphen = re.sub(r"[^a-z]+", "-", name).strip("-")
+        if compact:
+            aliases.add(compact)
+        if hyphen:
+            aliases.add(hyphen)
+        aliases.update(OBJECT_ALIASES.get(compact, ()))
+        aliases.update(OBJECT_ALIASES.get(hyphen, ()))
+    return {alias for alias in aliases if alias}
+
+
+def build_text_role_masks(rows: List[Dict[str, Any]], token_masks: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Build coarse object/spatial/context token masks for short RRSIS-D English expressions."""
+    object_masks = torch.zeros_like(token_masks, dtype=torch.bool)
+    spatial_masks = torch.zeros_like(token_masks, dtype=torch.bool)
+    context_masks = token_masks.clone().to(dtype=torch.bool)
+    for i, row in enumerate(rows):
+        valid = torch.nonzero(token_masks[i].to(dtype=torch.bool), as_tuple=False).view(-1)
+        if valid.numel() == 0:
+            continue
+        words = _words_for_token_masks(str(row.get("text", "")))
+        aliases = _category_aliases(row)
+        max_words = min(len(words), int(valid.numel()))
+        for word_i in range(max_words):
+            token_i = int(valid[word_i])
+            word = words[word_i]
+            if word in SPATIAL_WORDS:
+                spatial_masks[i, token_i] = True
+            if word in aliases:
+                object_masks[i, token_i] = True
+        if not object_masks[i].any():
+            for word_i in range(max_words):
+                token_i = int(valid[word_i])
+                if words[word_i] not in SPATIAL_WORDS:
+                    object_masks[i, token_i] = True
+                    break
+        context_masks[i] = token_masks[i].to(dtype=torch.bool)
+    return object_masks, spatial_masks, context_masks
 
 
 def parse_val_thresholds(raw: str) -> List[float]:
@@ -297,7 +409,7 @@ def build_rrsisd_text_embedding_cache(
     if int(args.text_embed_batch_size) <= 0:
         raise ValueError("--text-embed-batch-size must be > 0")
 
-    embedding_root = resolve_data_root(data) / f"openclip_{_safe_tag(args.text_model_name)}_{_safe_tag(args.text_pretrained)}"
+    embedding_root = resolve_data_root(data) / f"openclip_{_safe_tag(args.text_model_name)}_{_safe_tag(args.text_pretrained)}_tokens"
     paths = {split: embedding_root / f"{split}_text_embeddings.pt" for split in split_paths}
     missing = [split for split, path in paths.items() if args.text_overwrite or not path.exists()]
     if not missing:
@@ -325,17 +437,24 @@ def build_rrsisd_text_embedding_cache(
         ids = [str(row["id"]) for row in rows]
         texts = [str(row.get("text", "")).strip() for row in rows]
         print(f"Building RRSIS-D {split} text embeddings: {len(texts)} samples -> {paths[split]}")
-        embeddings = encoder.encode(texts, batch_size=int(args.text_embed_batch_size), return_tokens=False)
+        embeddings, token_masks = encoder.encode(texts, batch_size=int(args.text_embed_batch_size), return_tokens=True)
+        object_masks, spatial_masks, context_masks = build_text_role_masks(rows, token_masks)
         payload = {
             "ids": ids,
             "texts": texts,
             "embeddings": embeddings.float().cpu(),
+            "token_masks": token_masks.bool().cpu(),
+            "object_token_masks": object_masks.bool().cpu(),
+            "spatial_token_masks": spatial_masks.bool().cpu(),
+            "context_token_masks": context_masks.bool().cpu(),
             "metadata": {
                 "dataset_type": "rrsisd_refseg",
                 "split": split,
                 "model_name": args.text_model_name,
                 "pretrained": args.text_pretrained,
-                "embedding_dim": int(embeddings.shape[1]) if embeddings.ndim == 2 else 0,
+                "embedding_dim": int(embeddings.shape[-1]) if embeddings.ndim >= 2 else 0,
+                "embedding_kind": "token_features",
+                "token_roles": "context/object/spatial masks from RRSIS-D text and category words",
             },
         }
         torch.save(payload, paths[split])

@@ -308,7 +308,24 @@ def _load_text_embeddings(path: str | Path) -> Dict[str, Any]:
         raise ValueError(f"Text embedding payload must contain ids and embeddings: {path}")
     if int(len(ids)) != int(embeddings.shape[0]):
         raise ValueError(f"Text embedding count mismatch in {path}: {len(ids)} ids vs {embeddings.shape[0]} vectors")
-    return {str(sample_id): embeddings[i].detach().cpu().float() for i, sample_id in enumerate(ids)}
+    optional_masks = {
+        "text_token_mask": payload.get("token_masks"),
+        "text_object_mask": payload.get("object_token_masks"),
+        "text_spatial_mask": payload.get("spatial_token_masks"),
+        "text_context_mask": payload.get("context_token_masks"),
+    }
+    for name, value in optional_masks.items():
+        if value is not None and int(value.shape[0]) != int(len(ids)):
+            raise ValueError(f"{name} count mismatch in {path}: {len(ids)} ids vs {value.shape[0]} masks")
+
+    result: Dict[str, Any] = {}
+    for i, sample_id in enumerate(ids):
+        item = {"text_embedding": embeddings[i].detach().cpu().float()}
+        for name, value in optional_masks.items():
+            if value is not None:
+                item[name] = value[i].detach().cpu().bool()
+        result[str(sample_id)] = item
+    return result
 
 
 class RRSISDRefSegDataset:
@@ -432,10 +449,13 @@ class RRSISDRefSegDataset:
             "ref_id": int(row["ref_id"]),
         }
         if self.text_embeddings:
-            embedding = self.text_embeddings.get(sample_id)
-            if embedding is None:
+            embedding_item = self.text_embeddings.get(sample_id)
+            if embedding_item is None:
                 raise KeyError(f"Missing text embedding for RRSIS-D sample_id={sample_id}")
-            sample["text_embedding"] = embedding
+            if isinstance(embedding_item, dict):
+                sample.update(embedding_item)
+            else:
+                sample["text_embedding"] = embedding_item
         elif self.require_text_embedding:
             raise KeyError(f"Missing text embedding file entry for RRSIS-D sample_id={sample_id}")
         return sample
