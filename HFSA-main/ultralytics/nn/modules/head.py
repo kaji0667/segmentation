@@ -233,10 +233,10 @@ class SemanticSegment(nn.Module):
 
 
 class TextPromptSegment(nn.Module):
-    """Language-guided multi-scale decoder that returns one binary mask per prompt."""
+    """Text-conditioned segmentation head that returns one binary mask per prompt."""
 
     def __init__(self, nc=80, hidden=128, embed_dim=128, upsample=8, text_dim=0, ch=()):
-        """Initialize a lightweight text-conditioned progressive decoder."""
+        """Initialize a lightweight FPN-style prompt segmentation head."""
         super().__init__()
         self.nc = nc
         self.nl = len(ch)
@@ -248,74 +248,33 @@ class TextPromptSegment(nn.Module):
 
         self.proj = nn.ModuleList(Conv(c, hidden, 1) for c in ch)
         self.scale_gate = nn.Linear(self.text_dim, self.nl)
-        nn.init.zeros_(self.scale_gate.weight)
-        nn.init.zeros_(self.scale_gate.bias)
-        self.decode_blocks = nn.ModuleList(
-            [nn.Sequential(Conv(hidden * 2, hidden, 3), Conv(hidden, hidden, 3)) for _ in range(max(self.nl - 1, 0))]
+        self.fuse = nn.Sequential(
+            Conv(hidden * self.nl, hidden, 3),
+            Conv(hidden, hidden, 3),
         )
-        self.mask_head = nn.Conv2d(hidden, 1, 1)
+        self.context = nn.Sequential(
+            Conv(hidden, hidden, 3),
+            Conv(hidden, hidden, 3),
+        )
         self.pixel_proj = nn.Conv2d(hidden, embed_dim, 1)
         self.class_embed = nn.Embedding(nc, self.text_dim)
         self.text_proj = nn.Linear(self.text_dim, embed_dim)
-        self.alpha = nn.Parameter(torch.zeros(1))
+        self.query_proj = nn.Linear(self.text_dim, embed_dim)
+        self.key_proj = nn.Conv2d(embed_dim, embed_dim, 1)
+        self.value_proj = nn.Conv2d(embed_dim, embed_dim, 1)
+        self.film = nn.Linear(self.text_dim, embed_dim * 2)
+        nn.init.zeros_(self.film.weight)
+        nn.init.zeros_(self.film.bias)
+        self.spatial_gate = nn.Sequential(
+            Conv(embed_dim, embed_dim, 3),
+            nn.Conv2d(embed_dim, 1, 1),
+        )
+        self.mask_decoder = nn.Sequential(
+            Conv(embed_dim * 2 + 2, hidden, 3),
+            Conv(hidden, hidden, 3),
+            nn.Conv2d(hidden, 1, 1),
+        )
         self.bias = nn.Parameter(torch.zeros(1))
-
-    @staticmethod
-    def _align_token_mask(mask, tokens):
-        """Align an optional [B, L] token mask to the token feature length."""
-        if not isinstance(mask, torch.Tensor) or tokens.ndim != 3:
-            return None
-        mask = mask.to(device=tokens.device, dtype=torch.bool)
-        if mask.ndim != 2 or int(mask.shape[0]) != int(tokens.shape[0]):
-            return None
-        if int(mask.shape[1]) > int(tokens.shape[1]):
-            mask = mask[:, : int(tokens.shape[1])]
-        elif int(mask.shape[1]) < int(tokens.shape[1]):
-            pad = torch.zeros(
-                (int(tokens.shape[0]), int(tokens.shape[1]) - int(mask.shape[1])),
-                device=tokens.device,
-                dtype=torch.bool,
-            )
-            mask = torch.cat((mask, pad), dim=1)
-        return mask
-
-    @staticmethod
-    def _masked_pool(tokens, valid_mask):
-        """Mean-pool token features with per-sample fallback to all tokens."""
-        if valid_mask is None:
-            valid_mask = torch.ones(tokens.shape[:2], device=tokens.device, dtype=torch.bool)
-        empty_valid = ~valid_mask.any(dim=1)
-        pooled_mask = valid_mask
-        if bool(empty_valid.any()):
-            pooled_mask = pooled_mask.clone()
-            pooled_mask[empty_valid] = True
-        denom = pooled_mask.sum(dim=1).clamp_min(1).to(dtype=tokens.dtype).view(-1, 1)
-        return (tokens * pooled_mask.unsqueeze(-1).to(dtype=tokens.dtype)).sum(dim=1) / denom
-
-    def _sentence_vector(self, text_embedding, class_idx, bs, device, dtype, text_token_mask=None):
-        """Return one sentence-level vector from class ids, sentence features, or token features."""
-        if text_embedding is None:
-            if class_idx is None:
-                class_idx = torch.zeros(bs, dtype=torch.long, device=device)
-            class_idx = class_idx.to(device=device, dtype=torch.long).view(-1)
-            if int(class_idx.numel()) == 1 and bs > 1:
-                class_idx = class_idx.expand(bs)
-            return self.class_embed(class_idx[:bs])
-
-        text_embedding = text_embedding.to(device=device, dtype=dtype)
-        if text_embedding.ndim == 3:
-            valid_mask = self._align_token_mask(text_token_mask, text_embedding)
-            if valid_mask is None:
-                valid_mask = text_embedding.abs().sum(dim=-1) > 0
-                if not bool(valid_mask.any()):
-                    valid_mask = torch.ones(text_embedding.shape[:2], device=device, dtype=torch.bool)
-            return self._masked_pool(text_embedding, valid_mask)
-
-        if text_embedding.ndim == 1:
-            text_embedding = text_embedding.view(1, -1)
-        if int(text_embedding.shape[0]) == 1 and bs > 1:
-            text_embedding = text_embedding.expand(bs, -1)
-        return text_embedding[:bs]
 
     def forward(
         self,
@@ -327,28 +286,50 @@ class TextPromptSegment(nn.Module):
         text_spatial_mask=None,
         text_context_mask=None,
     ):
-        """Decode P5->P4->P3 with light sentence-level text conditioning."""
+        """Fuse multi-scale features with a prompt vector and output logits [B, 1, H, W]."""
+        target_size = x[0].shape[-2:]
         bs = x[0].shape[0]
         device = x[0].device
-        dtype = x[0].dtype
-        text_vector = self._sentence_vector(text_embedding, class_idx, bs, device, dtype, text_token_mask=text_token_mask)
+        if text_embedding is None:
+            if class_idx is None:
+                class_idx = torch.zeros(bs, dtype=torch.long, device=device)
+            class_idx = class_idx.to(device=device, dtype=torch.long).view(-1)
+            text_vector = self.class_embed(class_idx)
+        else:
+            text_vector = text_embedding.to(device=device, dtype=x[0].dtype)
+            if text_vector.ndim == 3:
+                text_vector = text_vector.mean(1)
 
         scale_weight = (torch.softmax(self.scale_gate(text_vector), dim=1) * self.nl).view(bs, self.nl, 1, 1, 1)
         feats = []
         for i, feat in enumerate(x):
-            feats.append(self.proj[i](feat) * scale_weight[:, i])
+            feat = self.proj[i](feat)
+            if feat.shape[-2:] != target_size:
+                feat = nn.functional.interpolate(feat, size=target_size, mode="bilinear", align_corners=False)
+            feat = feat * scale_weight[:, i]
+            feats.append(feat)
 
-        decoded = feats[-1]
-        for block_index, feat_index in enumerate(range(self.nl - 2, -1, -1)):
-            skip = feats[feat_index]
-            decoded = nn.functional.interpolate(decoded, size=skip.shape[-2:], mode="bilinear", align_corners=False)
-            decoded = self.decode_blocks[block_index](torch.cat((decoded, skip), dim=1))
+        visual = self.pixel_proj(self.context(self.fuse(torch.cat(feats, 1))))
+        gamma, beta = self.film(text_vector).chunk(2, dim=1)
+        gamma = torch.tanh(gamma).view(bs, self.embed_dim, 1, 1)
+        beta = beta.view(bs, self.embed_dim, 1, 1)
+        text_embedding = self.text_proj(text_vector).view(bs, self.embed_dim, 1, 1)
+        visual = visual * (1.0 + gamma) + beta
+        visual_norm = nn.functional.normalize(visual, dim=1)
+        text_embedding = nn.functional.normalize(text_embedding, dim=1)
+        similarity = (visual_norm * text_embedding).sum(1, keepdim=True)
 
-        logits = self.mask_head(decoded)
-        pixel_embedding = nn.functional.normalize(self.pixel_proj(decoded), dim=1)
-        text_embedding = nn.functional.normalize(self.text_proj(text_vector), dim=1).view(bs, self.embed_dim, 1, 1)
-        similarity = (pixel_embedding * text_embedding).sum(1, keepdim=True)
-        logits = logits + self.alpha.view(1, 1, 1, 1) * similarity + self.bias
+        key = nn.functional.normalize(self.key_proj(visual), dim=1)
+        value = self.value_proj(visual)
+        query = nn.functional.normalize(self.query_proj(text_vector), dim=1).view(bs, self.embed_dim, 1)
+        attn_logits = torch.bmm(key.flatten(2).transpose(1, 2), query).transpose(1, 2) / math.sqrt(self.embed_dim)
+        attn_map = torch.softmax(attn_logits, dim=-1).view(bs, 1, *target_size)
+
+        gate = torch.sigmoid(self.spatial_gate(visual) + similarity + attn_map)
+        gated_visual = visual * gate
+        gated_value = value * gate
+        logits = self.mask_decoder(torch.cat([gated_visual, gated_value, similarity, attn_map], 1))
+        logits = logits + similarity + self.bias
         if self.upsample > 1:
             logits = nn.functional.interpolate(logits, scale_factor=self.upsample, mode="bilinear", align_corners=False)
         return logits
