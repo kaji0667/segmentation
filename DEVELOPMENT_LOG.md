@@ -344,3 +344,35 @@ Verification:
 Usage Note:
 - Future controlled comparisons should include `--seed 42`.
 - Use `--deterministic` only when strict reproducibility is more important than speed; it may slow CUDA training or warn about unsupported deterministic kernels.
+
+## 2026-08-17
+
+### RRSIS-D Official Metric Protocol
+
+Context:
+- Competition guidance requires official dataset metrics and reproducible threshold handling.
+- RRSIS-D papers define oIoU as cumulative foreground intersection over union, mIoU as the mean of per-sample IoUs, and Pr@0.5 through Pr@0.9 as sample success rates.
+- The previous CSV field `miou` contained foreground aggregate IoU, while the paper mIoU was stored as `sample_miou`. Per-category `class_iou` was category aggregate IoU rather than category sample-mean IoU.
+
+Changes:
+- Added explicit `oiou` and `official_miou` result fields while retaining legacy fields.
+- Added official per-category mIoU and separate per-category oIoU output.
+- Added `--val-select-metric oiou|miou`; legacy `iou` remains an oIoU alias.
+- Added `--test-after-train` and `--max-test-batches`.
+- Test evaluation loads `best.pt` and freezes the validation-selected threshold.
+- Test reports include official metrics, per-category metrics, parameter counts, checkpoint size, evaluation duration, mean time per sample, and peak allocated GPU memory.
+- Added `TEST_AFTER_TRAIN=1` and `MAX_TEST_BATCHES` support to `run_semseg_preset.sh`.
+
+Verification:
+- `python -m py_compile train_semseg.py`: passed.
+- Synthetic metric check: oIoU `2/3`, sample mIoU `0.75`, and per-category values `1.0/0.5`: passed.
+- GPU smoke training with `--val-select-metric miou`: passed.
+- GPU smoke training plus fixed-threshold test evaluation: passed and produced `test_results.json`.
+- Test text embedding cache for all 3,481 RRSIS-D test samples was generated successfully.
+- Full 1,740-sample validation rerun of `rrsisd_learnable_gate_b4_e60_seed42/weights/best.pt` at its frozen threshold `0.85`: `oIoU=0.6997935`, `mIoU=0.5255537`, `class_macro_mIoU=0.5544193`, `Pr@0.5/0.7/0.9=0.5931034/0.4166667/0.1459770`.
+
+Protocol Note:
+- Historical `target_iou` is equivalent to official oIoU.
+- Historical `sample_miou` is equivalent to official mIoU.
+- Historical `binary_miou` is the mean of background and foreground IoUs and must not be compared with RRSIS-D paper mIoU.
+- Historical `class_iou` is category aggregate IoU and must not be reported as category mIoU.

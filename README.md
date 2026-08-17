@@ -42,6 +42,22 @@ After preparing the RRSIS-D dataset locally and placing the pretrained YOLO weig
 bash run_semseg_preset.sh baseline
 ```
 
+To evaluate the best validation checkpoint on the official test split with the validation-selected threshold frozen:
+
+```bash
+TEST_AFTER_TRAIN=1 bash run_semseg_preset.sh baseline
+```
+
+The main RRSIS-D report fields are:
+
+- `oiou`: cumulative foreground intersection over union, matching paper oIoU/cIoU.
+- `official_miou`: mean of per-sample foreground IoUs, matching paper mIoU/gIoU.
+- `pr_0_5` through `pr_0_9`: fraction of samples reaching each IoU threshold.
+- `class_miou`: official per-category mean sample IoU.
+- `class_oiou`: per-category cumulative foreground IoU.
+
+When test evaluation is enabled, `test_results.json` also records parameter counts, checkpoint size, evaluation duration, mean time per sample, and peak allocated GPU memory.
+
 The best historical local branch was:
 
 ```text

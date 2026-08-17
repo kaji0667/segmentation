@@ -51,3 +51,10 @@
 ## 推荐下一步
 
 保留 `boost=2` 的 non-P2 结果作为 baseline，然后把小目标判断从 bbox 面积改为真实 RLE mask 面积。改完后再测试较温和的 boost，例如 `1.5` 或 `2.0`，重点比较弱类 IoU 和验证预览图。
+
+### 8. RRSIS-D 官方评测口径标准化
+- 新增明确的 `oiou` 与论文口径 `official_miou` 字段；旧 `target_iou`、`sample_miou` 继续保留兼容。
+- 新增真正的每类别 sample-mIoU，并把原有类别累计结果明确命名为 class-oIoU。
+- 新增按 oIoU 或 mIoU 选择验证 checkpoint 的能力。
+- 新增训练完成后加载最佳 checkpoint、冻结验证阈值并评估 test split 的流程。
+- test 报告同时记录 Pr@0.5 至 Pr@0.9、类别指标、参数量、checkpoint 大小、平均评测耗时和峰值 GPU 显存。

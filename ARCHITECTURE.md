@@ -60,4 +60,16 @@ Restricted:
 
 ## Recent Architecture Decision Status
 
-No new architecture-level decision was introduced by the latest adjustment. The change is treated as a conservative training/data policy update inside the semantic segmentation branch.
+ADR-0004 standardizes the RRSIS-D evaluation protocol while retaining legacy result fields for historical compatibility.
+
+## RRSIS-D Evaluation Protocol
+
+The semantic segmentation entry now distinguishes the published RRSIS-D metrics from internal diagnostics:
+
+- `oiou`: cumulative foreground intersection divided by cumulative foreground union across the split. Historical `target_iou` is equivalent.
+- `official_miou`: mean of per-sample foreground IoUs. Historical `sample_miou` is equivalent.
+- `Pr@0.5` through `Pr@0.9`: fraction of samples whose foreground IoU reaches the corresponding threshold.
+- `class_miou`: per-category mean of sample IoUs, grouped by `class_idx`.
+- `class_oiou`: per-category cumulative foreground IoU. Historical `class_iou` is equivalent and is not the paper per-category mIoU.
+
+Validation may select a checkpoint by oIoU or official mIoU. Optional test evaluation loads the best validation checkpoint and reuses its frozen validation-selected mask threshold. It does not scan thresholds on the test split. See ADR-0004.

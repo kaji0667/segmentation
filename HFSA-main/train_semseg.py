@@ -107,10 +107,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--augment-vflip", type=float, default=0.5, help="Train-time vertical flip probability for samples without directional text.")
     parser.add_argument("--augment-color-jitter", type=float, default=0.15, help="Train-time brightness/contrast jitter strength.")
     parser.add_argument("--val-thresholds", type=str, default="0.5", help="Comma-separated sigmoid thresholds to scan during binary validation.")
-    parser.add_argument("--val-select-metric", type=str, default="iou", choices=("iou", "f1", "fbeta", "precision"), help="Metric used to choose validation threshold and best checkpoint.")
+    parser.add_argument(
+        "--val-select-metric",
+        type=str,
+        default="iou",
+        choices=("iou", "oiou", "miou", "f1", "fbeta", "precision"),
+        help="Metric used to choose validation threshold and best checkpoint; iou is the legacy alias for oIoU.",
+    )
     parser.add_argument("--val-fbeta", type=float, default=0.7, help="Beta for precision-biased F-beta validation score when --val-select-metric=fbeta; beta < 1 favors precision.")
     parser.add_argument("--max-batches", type=int, default=2, help="Stop each epoch after this many train batches; 0 means full epoch.")
     parser.add_argument("--max-val-batches", type=int, default=2, help="Stop validation after this many batches; 0 means full validation.")
+    parser.add_argument("--test-after-train", action="store_true", help="Evaluate the best checkpoint on the test split using the validation-selected threshold.")
+    parser.add_argument("--max-test-batches", type=int, default=0, help="Stop test evaluation after this many batches; 0 means full test split.")
     parser.add_argument("--print-interval", type=int, default=10, help="Print train progress every N batches.")
     parser.add_argument("--save-dir", type=str, default="runs/semseg/train", help="Directory for run artifacts.")
     parser.add_argument("--nosave", action="store_true", help="Disable checkpoint and artifact saving.")
@@ -370,8 +378,10 @@ def parse_val_thresholds(raw: str) -> List[float]:
 
 
 def validation_selection_score(metrics: Dict[str, Any], select_metric: str) -> float:
-    if select_metric == "iou":
-        return float(metrics["miou"])
+    if select_metric in {"iou", "oiou"}:
+        return float(metrics["oiou"])
+    if select_metric == "miou":
+        return float(metrics["official_miou"])
     if select_metric == "f1":
         return float(metrics["f1"])
     if select_metric == "fbeta":
@@ -751,6 +761,7 @@ def sample_iou_values(preds: torch.Tensor, targets: torch.Tensor, ignore_index: 
     for pred, target in zip(pred_labels, target_labels):
         valid = target != ignore_index
         if not valid.any():
+            values.append(torch.full((), float("nan"), device=preds.device))
             continue
         pred = pred[valid]
         target = target[valid].clamp(0, 1).bool()
@@ -776,6 +787,16 @@ def text_class_target_ious(class_confusion: torch.Tensor, names: List[str]) -> D
         fn = matrix[1, 0]
         denom = tp + fp + fn
         result[names[i] if i < len(names) else str(i)] = float(tp / denom.clamp_min(1.0)) if denom > 0 else float("nan")
+    return result
+
+
+def text_class_mean_ious(iou_sums: torch.Tensor, iou_counts: torch.Tensor, names: List[str]) -> Dict[str, float]:
+    """Return official per-category mIoU by averaging sample IoUs within each semantic category."""
+    result: Dict[str, float] = {}
+    for i, (iou_sum, count) in enumerate(zip(iou_sums.double(), iou_counts.long())):
+        if int(count) <= 0:
+            continue
+        result[names[i] if i < len(names) else str(i)] = float(iou_sum / count)
     return result
 
 
@@ -809,6 +830,8 @@ def append_results(path: Path, row: Dict[str, float]) -> None:
         "train_loss",
         "val_loss",
         "pixel_acc",
+        "oiou",
+        "official_miou",
         "miou",
         "target_iou",
         "binary_miou",
@@ -826,6 +849,9 @@ def append_results(path: Path, row: Dict[str, float]) -> None:
         "pr_0_9",
         "pred_pos_rate",
         "target_pos_rate",
+        "class_macro_miou",
+        "class_miou",
+        "class_oiou",
         "class_iou",
         "threshold_metrics",
         "lr",
@@ -855,19 +881,33 @@ def plot_results(results_csv: Path, save_path: Path) -> None:
     epochs = [int(r["epoch"]) for r in rows]
     train_loss = [float(r["train_loss"]) for r in rows]
     val_loss = [float(r["val_loss"]) if r["val_loss"] else np.nan for r in rows]
-    miou = [float(r["miou"]) if r["miou"] else np.nan for r in rows]
-    target_iou = [float(r["target_iou"]) if r.get("target_iou") else np.nan for r in rows]
+    official_miou = [
+        float(r["official_miou"])
+        if r.get("official_miou")
+        else float(r["sample_miou"])
+        if r.get("sample_miou")
+        else np.nan
+        for r in rows
+    ]
+    oiou = [
+        float(r["oiou"])
+        if r.get("oiou")
+        else float(r["target_iou"])
+        if r.get("target_iou")
+        else np.nan
+        for r in rows
+    ]
     pixel_acc = [float(r["pixel_acc"]) if r["pixel_acc"] else np.nan for r in rows]
-    iou_curve = target_iou if not np.all(np.isnan(target_iou)) else miou
-    iou_title = "target IoU" if not np.all(np.isnan(target_iou)) else "mIoU"
 
     fig, axes = plt.subplots(2, 2, figsize=(10, 7), tight_layout=True)
     axes[0, 0].plot(epochs, train_loss, marker="o")
     axes[0, 0].set_title("train loss")
     axes[0, 1].plot(epochs, val_loss, marker="o")
     axes[0, 1].set_title("val loss")
-    axes[1, 0].plot(epochs, iou_curve, marker="o")
-    axes[1, 0].set_title(iou_title)
+    axes[1, 0].plot(epochs, oiou, marker="o", label="oIoU")
+    axes[1, 0].plot(epochs, official_miou, marker="o", label="mIoU")
+    axes[1, 0].set_title("official IoU metrics")
+    axes[1, 0].legend()
     axes[1, 1].plot(epochs, pixel_acc, marker="o")
     axes[1, 1].set_title("pixel accuracy")
     for ax in axes.ravel():
@@ -932,6 +972,16 @@ def validate(
         if text_queries
         else None
     )
+    class_sample_iou_sums = (
+        {float(threshold): torch.zeros(len(class_names_for_text or []), dtype=torch.float64) for threshold in thresholds}
+        if text_queries
+        else None
+    )
+    class_sample_iou_counts = (
+        {float(threshold): torch.zeros(len(class_names_for_text or []), dtype=torch.int64) for threshold in thresholds}
+        if text_queries
+        else None
+    )
     running = 0.0
     seen = 0
     preview_batch = None
@@ -946,11 +996,24 @@ def validate(
             update_confusion_matrix(confusion, logits, batch["mask"], nc, ignore_index, threshold=threshold)
             sample_ious = sample_iou_values(logits, batch["mask"], ignore_index, threshold)
             if sample_ious.numel():
-                sample_iou_sums[threshold] += float(sample_ious.sum().detach().cpu())
-                sample_iou_counts[threshold] += int(sample_ious.numel())
                 sample_ious_cpu = sample_ious.detach().cpu()
+                finite = torch.isfinite(sample_ious_cpu)
+                sample_iou_sums[threshold] += float(sample_ious_cpu[finite].sum())
+                sample_iou_counts[threshold] += int(finite.sum())
                 for iou_threshold in SAMPLE_IOU_THRESHOLDS:
-                    sample_iou_hits[threshold][iou_threshold] += int((sample_ious_cpu >= iou_threshold).sum())
+                    sample_iou_hits[threshold][iou_threshold] += int((sample_ious_cpu[finite] >= iou_threshold).sum())
+                if (
+                    class_sample_iou_sums is not None
+                    and class_sample_iou_counts is not None
+                    and "class_idx" in batch
+                    and sample_ious_cpu.numel() == batch["class_idx"].numel()
+                ):
+                    class_indices = batch["class_idx"].detach().cpu().view(-1).long()
+                    for class_index, sample_iou, is_finite in zip(class_indices, sample_ious_cpu, finite):
+                        index = int(class_index)
+                        if bool(is_finite) and 0 <= index < len(class_sample_iou_sums[threshold]):
+                            class_sample_iou_sums[threshold][index] += float(sample_iou)
+                            class_sample_iou_counts[threshold][index] += 1
             if class_confusions is not None and "class_idx" in batch:
                 update_text_class_confusion(
                     class_confusions[threshold],
@@ -978,6 +1041,8 @@ def validate(
             metrics["miou"] = metrics["target_iou"]
         sample_count = max(sample_iou_counts[threshold], 1)
         metrics["sample_miou"] = sample_iou_sums[threshold] / sample_count
+        metrics["oiou"] = metrics["target_iou"]
+        metrics["official_miou"] = metrics["sample_miou"]
         for iou_threshold in SAMPLE_IOU_THRESHOLDS:
             metrics[f"pr_{str(iou_threshold).replace('.', '_')}"] = sample_iou_hits[threshold][iou_threshold] / sample_count
         metrics["selection_score"] = validation_selection_score(metrics, val_select_metric)
@@ -996,11 +1061,23 @@ def validate(
         if class_confusions is not None
         else {}
     )
+    text_class_miou = (
+        text_class_mean_ious(
+            class_sample_iou_sums[best_threshold],
+            class_sample_iou_counts[best_threshold],
+            class_names_for_text or [],
+        )
+        if class_sample_iou_sums is not None and class_sample_iou_counts is not None
+        else {}
+    )
+    class_macro_miou = float(np.mean(list(text_class_miou.values()))) if text_class_miou else float("nan")
     model.train()
     return {
         "loss": running / max(seen, 1),
         "pixel_acc": best_metrics["pixel_acc"],
         "miou": best_metrics["miou"],
+        "oiou": best_metrics["oiou"],
+        "official_miou": best_metrics["official_miou"],
         "target_iou": best_metrics["target_iou"],
         "binary_miou": best_metrics["binary_miou"],
         "best_threshold": best_threshold,
@@ -1014,9 +1091,12 @@ def validate(
         "pred_pos_rate": best_metrics["pred_pos_rate"],
         "target_pos_rate": best_metrics["target_pos_rate"],
         "text_class_iou": text_class_iou,
+        "text_class_miou": text_class_miou,
+        "class_macro_miou": class_macro_miou,
         "per_class_iou": best_metrics["per_class_iou"],
         "threshold_metrics": threshold_metrics,
         "confusion": best_confusion,
+        "evaluated_samples": int(sample_iou_counts[best_threshold]),
     }
 
 
@@ -1056,11 +1136,17 @@ def main() -> None:
     weights_dir = save_dir / "weights"
     results_csv = save_dir / "results.csv"
 
+    if args.test_after_train and args.nosave:
+        raise ValueError("--test-after-train requires checkpoint saving; remove --nosave.")
+
     train_jsonl = resolve_split_path(data, "train")
     val_jsonl = resolve_split_path(data, "val") if "val" in data and not args.no_val else None
+    test_jsonl = resolve_split_path(data, "test") if args.test_after_train and "test" in data else None
     split_paths = {"train": train_jsonl}
     if val_jsonl:
         split_paths["val"] = val_jsonl
+    if test_jsonl:
+        split_paths["test"] = test_jsonl
     text_embedding_paths = build_rrsisd_text_embedding_cache(args, data, split_paths, device)
     train_set = build_semseg_dataset(
         data,
@@ -1078,6 +1164,17 @@ def main() -> None:
             text_embedding_file=text_embedding_paths.get("val"),
         )
         if val_jsonl
+        else None
+    )
+    test_set = (
+        build_semseg_dataset(
+            data,
+            test_jsonl,
+            args,
+            "test",
+            text_embedding_file=text_embedding_paths.get("test"),
+        )
+        if test_jsonl
         else None
     )
     data_generator = torch.Generator()
@@ -1108,6 +1205,19 @@ def main() -> None:
             generator=data_generator,
         )
         if val_set is not None
+        else None
+    )
+    test_loader = (
+        DataLoader(
+            test_set,
+            batch_size=args.batch,
+            shuffle=False,
+            num_workers=args.workers,
+            pin_memory=device.type == "cuda",
+            worker_init_fn=seed_worker,
+            generator=data_generator,
+        )
+        if test_set is not None
         else None
     )
 
@@ -1142,6 +1252,7 @@ def main() -> None:
     print(f"dataset_type: {dtype}")
     print(f"train samples: {len(train_set)}")
     print(f"val samples: {len(val_set) if val_set is not None else 0}")
+    print(f"test samples: {len(test_set) if test_set is not None else 0}")
     print(f"classes: {nc}")
     print(f"weights: {args.weights or '<none>'}")
     print(f"text queries: {args.text_queries}")
@@ -1240,6 +1351,8 @@ def main() -> None:
             "train_loss": train_loss,
             "val_loss": val_metrics["loss"] if val_metrics else "",
             "pixel_acc": val_metrics["pixel_acc"] if val_metrics else "",
+            "oiou": val_metrics["oiou"] if val_metrics else "",
+            "official_miou": val_metrics["official_miou"] if val_metrics else "",
             "miou": val_metrics["miou"] if val_metrics else "",
             "target_iou": val_metrics["target_iou"] if val_metrics else "",
             "binary_miou": val_metrics["binary_miou"] if val_metrics else "",
@@ -1257,6 +1370,9 @@ def main() -> None:
             "pr_0_9": val_metrics["pr_0_9"] if val_metrics else "",
             "pred_pos_rate": val_metrics["pred_pos_rate"] if val_metrics else "",
             "target_pos_rate": val_metrics["target_pos_rate"] if val_metrics else "",
+            "class_macro_miou": val_metrics["class_macro_miou"] if val_metrics else "",
+            "class_miou": json.dumps(val_metrics["text_class_miou"], sort_keys=True) if val_metrics else "",
+            "class_oiou": json.dumps(val_metrics["text_class_iou"], sort_keys=True) if val_metrics else "",
             "class_iou": json.dumps(val_metrics["text_class_iou"], sort_keys=True) if val_metrics else "",
             "threshold_metrics": json.dumps(val_metrics["threshold_metrics"], sort_keys=True) if val_metrics else "",
             "lr": optimizer.param_groups[0]["lr"],
@@ -1267,12 +1383,11 @@ def main() -> None:
             + (
                 f"val_loss {val_metrics['loss']:.4f} "
                 f"pixel_acc {val_metrics['pixel_acc']:.4f} "
-                f"mIoU {val_metrics['miou']:.4f} "
-                f"target_iou {val_metrics['target_iou']:.4f} "
+                f"oIoU {val_metrics['oiou']:.4f} "
+                f"mIoU {val_metrics['official_miou']:.4f} "
                 f"thr {val_metrics['best_threshold']:.2f} "
                 f"P/R/F1/Fb {val_metrics['precision']:.4f}/{val_metrics['recall']:.4f}/{val_metrics['f1']:.4f}/{val_metrics['fbeta']:.4f} "
                 f"select {val_metrics['selection_score']:.4f} "
-                f"sample_mIoU {val_metrics['sample_miou']:.4f} "
                 f"Pr@0.5/0.7/0.9 {val_metrics['pr_0_5']:.4f}/{val_metrics['pr_0_7']:.4f}/{val_metrics['pr_0_9']:.4f} "
                 f"pred_pos {val_metrics['pred_pos_rate']:.4f} "
                 if val_metrics
@@ -1280,13 +1395,13 @@ def main() -> None:
             )
             + f"time {epoch_time:.1f}s"
         )
-        if val_metrics and val_metrics.get("text_class_iou"):
-            class_iou_text = ", ".join(
+        if val_metrics and val_metrics.get("text_class_miou"):
+            class_miou_text = ", ".join(
                 f"{name}:{value:.3f}"
-                for name, value in val_metrics["text_class_iou"].items()
+                for name, value in val_metrics["text_class_miou"].items()
                 if name != "background"
             )
-            print(f"per-class target IoU: {class_iou_text}")
+            print(f"per-class mIoU: {class_miou_text}")
 
         if writer is not None:
             writer.add_scalar("loss/train", train_loss, epoch + 1)
@@ -1294,22 +1409,24 @@ def main() -> None:
             if val_metrics:
                 writer.add_scalar("loss/val", val_metrics["loss"], epoch + 1)
                 writer.add_scalar("metrics/pixel_acc", val_metrics["pixel_acc"], epoch + 1)
-                writer.add_scalar("metrics/mIoU", val_metrics["miou"], epoch + 1)
-                writer.add_scalar("metrics/target_iou", val_metrics["target_iou"], epoch + 1)
+                writer.add_scalar("metrics/oIoU", val_metrics["oiou"], epoch + 1)
+                writer.add_scalar("metrics/mIoU", val_metrics["official_miou"], epoch + 1)
                 writer.add_scalar("metrics/best_threshold", val_metrics["best_threshold"], epoch + 1)
                 writer.add_scalar("metrics/precision", val_metrics["precision"], epoch + 1)
                 writer.add_scalar("metrics/recall", val_metrics["recall"], epoch + 1)
                 writer.add_scalar("metrics/f1", val_metrics["f1"], epoch + 1)
                 writer.add_scalar("metrics/fbeta", val_metrics["fbeta"], epoch + 1)
                 writer.add_scalar("metrics/selection_score", val_metrics["selection_score"], epoch + 1)
-                writer.add_scalar("metrics/sample_miou", val_metrics["sample_miou"], epoch + 1)
                 for iou_threshold in SAMPLE_IOU_THRESHOLDS:
                     key = f"pr_{str(iou_threshold).replace('.', '_')}"
                     writer.add_scalar(f"metrics/Pr@{iou_threshold}", val_metrics[key], epoch + 1)
                 writer.add_scalar("metrics/pred_pos_rate", val_metrics["pred_pos_rate"], epoch + 1)
                 writer.add_scalar("metrics/target_pos_rate", val_metrics["target_pos_rate"], epoch + 1)
+                writer.add_scalar("metrics/class_macro_mIoU", val_metrics["class_macro_miou"], epoch + 1)
+                for name, value in val_metrics.get("text_class_miou", {}).items():
+                    writer.add_scalar(f"metrics/class_mIoU/{name}", value, epoch + 1)
                 for name, value in val_metrics.get("text_class_iou", {}).items():
-                    writer.add_scalar(f"metrics/class_iou/{name}", value, epoch + 1)
+                    writer.add_scalar(f"metrics/class_oIoU/{name}", value, epoch + 1)
 
         if not args.nosave:
             append_results(results_csv, metrics)
@@ -1317,6 +1434,8 @@ def main() -> None:
                 "train_loss": float(train_loss),
                 "val_loss": float(val_metrics["loss"]) if val_metrics else float("nan"),
                 "pixel_acc": float(val_metrics["pixel_acc"]) if val_metrics else float("nan"),
+                "oiou": float(val_metrics["oiou"]) if val_metrics else float("nan"),
+                "official_miou": float(val_metrics["official_miou"]) if val_metrics else float("nan"),
                 "miou": float(val_metrics["miou"]) if val_metrics else float("nan"),
                 "target_iou": float(val_metrics["target_iou"]) if val_metrics else float("nan"),
                 "binary_miou": float(val_metrics["binary_miou"]) if val_metrics else float("nan"),
@@ -1334,6 +1453,7 @@ def main() -> None:
                 "pr_0_9": float(val_metrics["pr_0_9"]) if val_metrics else float("nan"),
                 "pred_pos_rate": float(val_metrics["pred_pos_rate"]) if val_metrics else float("nan"),
                 "target_pos_rate": float(val_metrics["target_pos_rate"]) if val_metrics else float("nan"),
+                "class_macro_miou": float(val_metrics["class_macro_miou"]) if val_metrics else float("nan"),
             }
             last_path = weights_dir / "last.pt"
             save_checkpoint(last_path, model, optimizer, epoch + 1, args, data, checkpoint_metrics)
@@ -1362,6 +1482,90 @@ def main() -> None:
                 f"epoch(s); best score {best_fitness:.4f}"
             )
             break
+
+    if test_loader is not None:
+        best_path = weights_dir / "best.pt"
+        if not best_path.exists():
+            raise FileNotFoundError(f"Cannot run test evaluation without best checkpoint: {best_path}")
+        checkpoint = torch.load(best_path, map_location=device, weights_only=False)
+        model.load_state_dict(checkpoint["model"], strict=True)
+        checkpoint_metrics = checkpoint.get("metrics", {})
+        test_threshold = float(checkpoint_metrics.get("best_threshold", val_thresholds[0]))
+        if not np.isfinite(test_threshold):
+            test_threshold = float(val_thresholds[0])
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
+            torch.cuda.synchronize(device)
+        test_start = time.perf_counter()
+        test_metrics = validate(
+            model,
+            test_loader,
+            device,
+            metric_nc,
+            ignore_index,
+            args.max_test_batches,
+            None if args.no_preview else save_dir / "test_batch0_pred.jpg",
+            palette,
+            args.text_queries,
+            prompt_embeddings,
+            names,
+            [test_threshold],
+            "oiou",
+            args.val_fbeta,
+        )
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        test_seconds = time.perf_counter() - test_start
+        evaluated_samples = max(int(test_metrics["evaluated_samples"]), 1)
+        test_report = {
+            "split": "test",
+            "checkpoint": str(best_path),
+            "checkpoint_epoch": int(checkpoint.get("epoch", 0)),
+            "threshold_source": "best validation checkpoint",
+            "threshold": test_threshold,
+            "evaluated_samples": int(test_metrics["evaluated_samples"]),
+            "oIoU": test_metrics["oiou"],
+            "mIoU": test_metrics["official_miou"],
+            "Pr@0.5": test_metrics["pr_0_5"],
+            "Pr@0.6": test_metrics["pr_0_6"],
+            "Pr@0.7": test_metrics["pr_0_7"],
+            "Pr@0.8": test_metrics["pr_0_8"],
+            "Pr@0.9": test_metrics["pr_0_9"],
+            "precision": test_metrics["precision"],
+            "recall": test_metrics["recall"],
+            "f1": test_metrics["f1"],
+            "pixel_acc": test_metrics["pixel_acc"],
+            "pred_pos_rate": test_metrics["pred_pos_rate"],
+            "target_pos_rate": test_metrics["target_pos_rate"],
+            "class_macro_mIoU": test_metrics["class_macro_miou"],
+            "class_mIoU": test_metrics["text_class_miou"],
+            "class_oIoU": test_metrics["text_class_iou"],
+            "total_parameters": sum(parameter.numel() for parameter in model.parameters()),
+            "trainable_parameters": sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad),
+            "checkpoint_size_mb": best_path.stat().st_size / (1024**2),
+            "evaluation_seconds": test_seconds,
+            "mean_ms_per_sample": test_seconds * 1000.0 / evaluated_samples,
+            "peak_gpu_memory_mb": (
+                torch.cuda.max_memory_allocated(device) / (1024**2) if device.type == "cuda" else None
+            ),
+            "device": str(device),
+            "imgsz": int(args.imgsz),
+            "batch": int(args.batch),
+            "text_encoder": args.text_encoder,
+            "text_model_name": args.text_model_name,
+            "text_pretrained": args.text_pretrained,
+        }
+        with (save_dir / "test_results.json").open("w", encoding="utf-8") as f:
+            json.dump(test_report, f, ensure_ascii=False, indent=2, sort_keys=True)
+        if not args.no_plots:
+            plot_confusion_matrix(test_metrics["confusion"], metric_names, save_dir / "test_confusion_matrix.png")
+        print(
+            "test metrics: "
+            f"oIoU={test_metrics['oiou']:.4f}, mIoU={test_metrics['official_miou']:.4f}, "
+            f"Pr@0.5/0.7/0.9={test_metrics['pr_0_5']:.4f}/{test_metrics['pr_0_7']:.4f}/{test_metrics['pr_0_9']:.4f}, "
+            f"threshold={test_threshold:.2f}"
+        )
+        print(f"saved test report: {save_dir / 'test_results.json'}")
 
     if writer is not None:
         writer.close()

@@ -39,6 +39,14 @@ common_args=(
   --seed "${SEED:-42}"
 )
 
+test_args=()
+if [[ "${TEST_AFTER_TRAIN:-0}" == "1" ]]; then
+  test_args+=(
+    --test-after-train
+    --max-test-batches "${MAX_TEST_BATCHES:-0}"
+  )
+fi
+
 case "$preset" in
   baseline)
     preset_args=(
@@ -97,4 +105,4 @@ case "$preset" in
     ;;
 esac
 
-python train_semseg.py "${common_args[@]}" "${preset_args[@]}" "$@"
+python train_semseg.py "${common_args[@]}" "${preset_args[@]}" "${test_args[@]}" "$@"

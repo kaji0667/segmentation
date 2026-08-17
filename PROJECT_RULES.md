@@ -353,6 +353,9 @@ Proposed / Accepted / Superseded
 - 遥感多模态任务至少区分检测、分类、分割、变化检测、图像描述/问答等任务类型，不得混用指标。
 - 检测指标必须记录 mAP、precision、recall、NMS 参数和 grounding 规则。
 - 分割指标必须记录 pixel_acc、mIoU、target IoU、precision、recall、F1、threshold。
+- RRSIS-D 论文口径中，oIoU/cIoU 必须按全 split 累计前景交并比计算，mIoU/gIoU 必须按逐样本前景 IoU 求平均；不得用背景/前景二分类 mIoU 替代论文 mIoU。
+- RRSIS-D 每类别 mIoU 必须先计算逐样本 IoU，再按 `class_idx` 分组平均；类别累计交并比必须单独标记为 class-oIoU。
+- test split 的二值化阈值必须由 validation split 选择并冻结，禁止在 test split 上重新扫描最优阈值。
 - 资源效率必须记录模型大小、参数量、显存、推理速度或训练吞吐，条件允许时纳入对比。
 - 评估结果不得只报最好值，必须记录可复现命令和数据 split。
 
