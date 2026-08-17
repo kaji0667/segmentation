@@ -269,6 +269,8 @@ class TextPromptSegment(nn.Module):
             Conv(embed_dim, embed_dim, 3),
             nn.Conv2d(embed_dim, 1, 1),
         )
+        self.similarity_gate_weight = nn.Parameter(torch.tensor(0.1))
+        self.attention_gate_weight = nn.Parameter(torch.tensor(0.1))
         self.mask_decoder = nn.Sequential(
             Conv(embed_dim * 2 + 2, hidden, 3),
             Conv(hidden, hidden, 3),
@@ -325,7 +327,11 @@ class TextPromptSegment(nn.Module):
         attn_logits = torch.bmm(key.flatten(2).transpose(1, 2), query).transpose(1, 2) / math.sqrt(self.embed_dim)
         attn_map = torch.softmax(attn_logits, dim=-1).view(bs, 1, *target_size)
 
-        gate = torch.sigmoid(self.spatial_gate(visual) + similarity + attn_map)
+        gate = torch.sigmoid(
+            self.spatial_gate(visual)
+            + self.similarity_gate_weight * similarity
+            + self.attention_gate_weight * attn_map
+        )
         gated_visual = visual * gate
         gated_value = value * gate
         logits = self.mask_decoder(torch.cat([gated_visual, gated_value, similarity, attn_map], 1))
