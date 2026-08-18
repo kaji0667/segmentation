@@ -1,0 +1,45 @@
+# ADR-0005: Fixed P3/P4 Text-Conditioned Deep Supervision
+
+## Status
+
+Accepted as a controlled experimental candidate. It is not yet a confirmed metric improvement.
+
+## Context
+
+The current FPN-style `TextPromptSegment` fuses P3/P4/P5 and applies the binary mask loss only to the final output. The latest official test result has strong aggregate oIoU but weaker sample mIoU and weak performance on classes such as vehicle, harbor, and bridge. A low-risk experiment is needed to provide more direct training signals to the finer P3/P4 features without changing the backbone, neck, OpenCLIP encoder, final spatial gate, or inference output.
+
+## Decision
+
+- Add text-conditioned auxiliary binary mask heads to P3 and P4 only.
+- Use fixed loss weights: final `1.0`, P3 `0.20`, P4 `0.10`.
+- Do not add P5 supervision in the first experiment because its 1/32 resolution can erase small targets.
+- Downsample auxiliary targets with foreground-preserving adaptive max pooling.
+- Reuse the current dynamic positive-weight BCE plus Tversky loss for every output.
+- Apply small-target sample multiplication only to the final loss, avoiding duplicate amplification in the auxiliary branches.
+- Enable the branches only when either auxiliary loss weight is positive.
+- During validation and inference, return only the final mask logits.
+
+The controlled preset is `run_semseg_preset.sh ds`, with default output `runs/semseg/ds_p3p4`.
+
+## Alternatives
+
+- Supervise P3/P4/P5 equally. Rejected for the first run because coarse P5 labels can harm small targets and make attribution harder.
+- Learn the auxiliary weights. Rejected because the requested first experiment uses fixed weights and a learned weighting mechanism would add another variable.
+- Replace the decoder. Rejected because previous decoder replacements regressed substantially.
+- Add image-only auxiliary masks. Rejected because every output must remain conditioned on the referring expression.
+
+## Impact
+
+- Adds training-only mask predictions and a small number of head parameters.
+- Adds no auxiliary branch computation during validation or inference.
+- Preserves the two existing learnable spatial-gate weights.
+- Requires a seed-42 controlled run against `rrsisd_learnable_gate_official_seed42` before any improvement claim.
+
+## Related
+
+- `HFSA-main/ultralytics/nn/modules/head.py`
+- `HFSA-main/ultralytics/utils/loss.py`
+- `HFSA-main/train_semseg.py`
+- `HFSA-main/run_semseg_preset.sh`
+- `ADR/0002-learnable-spatial-gate-weights.md`
+- `ADR/0004-standardize-rrsisd-evaluation-metrics.md`

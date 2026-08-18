@@ -73,3 +73,25 @@ The semantic segmentation entry now distinguishes the published RRSIS-D metrics 
 - `class_oiou`: per-category cumulative foreground IoU. Historical `class_iou` is equivalent and is not the paper per-category mIoU.
 
 Validation may select a checkpoint by oIoU or official mIoU. Optional test evaluation loads the best validation checkpoint and reuses its frozen validation-selected mask threshold. It does not scan thresholds on the test split. See ADR-0004.
+
+## Experimental P3/P4 Deep Supervision
+
+ADR-0005 adds a controlled, training-only deep-supervision candidate to the FPN-style `TextPromptSegment`:
+
+```mermaid
+flowchart LR
+    P3["P3 / 8"] --> A3["Text-conditioned auxiliary head"] --> M3["P3 mask"] --> L3["0.20 × auxiliary loss"]
+    P4["P4 / 16"] --> A4["Text-conditioned auxiliary head"] --> M4["P4 mask"] --> L4["0.10 × auxiliary loss"]
+    P3 --> F["Existing P3/P4/P5 fusion"]
+    P4 --> F
+    P5["P5 / 32"] --> F
+    T["OpenCLIP text vector"] --> A3
+    T --> A4
+    T --> F
+    F --> G["FiLM + similarity + attention + learnable spatial gate"] --> D["Existing mask decoder"] --> MF["Final mask"] --> LF["1.0 × main loss"]
+    L3 --> LT["Total training loss"]
+    L4 --> LT
+    LF --> LT
+```
+
+The auxiliary masks use the same BCE-Tversky objective as the final mask. Their targets are foreground-preserving downsampled masks. P5 has no auxiliary loss in the first experiment. Auxiliary outputs are disabled during validation and inference, so the official evaluation interface continues to receive only the final mask logits.

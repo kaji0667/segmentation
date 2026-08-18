@@ -376,3 +376,34 @@ Protocol Note:
 - Historical `sample_miou` is equivalent to official mIoU.
 - Historical `binary_miou` is the mean of background and foreground IoUs and must not be compared with RRSIS-D paper mIoU.
 - Historical `class_iou` is category aggregate IoU and must not be reported as category mIoU.
+
+## 2026-08-18
+
+### Fixed P3/P4 Text-Conditioned Deep Supervision Candidate
+
+Context:
+- The latest official run generalized normally but retained a large oIoU-to-sample-mIoU gap and weak vehicle/harbor/bridge results.
+- The user requested one controlled fixed-weight deep-supervision experiment without changing the backbone, neck, OpenCLIP encoder, final decoder, or the two learnable spatial-gate weights.
+
+Changes:
+- Added text-conditioned P3 and P4 auxiliary mask heads to `TextPromptSegment`.
+- Auxiliary branches execute only during training when their configured weights are positive.
+- Added fixed loss options `--loss-aux-p3-weight` and `--loss-aux-p4-weight`, both disabled by default.
+- Auxiliary targets use foreground-preserving adaptive max pooling.
+- Added the `ds` script preset with weights `P3=0.20`, `P4=0.10` and output `runs/semseg/ds_p3p4`.
+- Validation and test inference still return and evaluate only the final mask.
+
+Verification:
+- `python -m py_compile train_semseg.py ultralytics/nn/modules/head.py ultralytics/utils/loss.py`: passed.
+- `bash -n run_semseg_preset.sh`: passed.
+- CPU random-tensor regression test verified main/P3/P4 shapes, finite combined loss, gradients on both auxiliary heads, and final-only eval output: passed.
+- Full dataset training was intentionally not started; the user will launch it with the preset script.
+
+Controlled run command:
+
+```bash
+GPU=0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 SAVE_DIR=runs/semseg/ds_p3p4 bash run_semseg_preset.sh ds
+```
+
+Interpretation constraint:
+- This is an experimental candidate, not a confirmed improvement. Compare it against `rrsisd_learnable_gate_official_seed42` using oIoU, official mIoU, Pr@0.5-0.9, per-category mIoU, precision/recall, and predicted-positive versus target-positive rates.

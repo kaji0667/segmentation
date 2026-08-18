@@ -622,10 +622,67 @@ class SemanticSegmentationLoss:
         self.small_target_area = max(float(getattr(model, "loss_small_target_area", 0.0025)), 0.0)
         self.tversky_fp_weight = min(max(float(getattr(model, "loss_tversky_fp_weight", 0.5)), 0.0), 1.0)
         self.false_positive_weight = max(float(getattr(model, "loss_fp_weight", 0.0)), 0.0)
+        self.aux_p3_weight = max(float(getattr(model, "loss_aux_p3_weight", 0.0)), 0.0)
+        self.aux_p4_weight = max(float(getattr(model, "loss_aux_p4_weight", 0.0)), 0.0)
+
+    def _binary_mask_loss(self, logits, masks, apply_small_target_weight=True):
+        """Compute the existing BCE-Tversky loss for one binary mask scale."""
+        if logits.shape[-2:] != masks.shape[-2:]:
+            logits = F.interpolate(logits, size=masks.shape[-2:], mode="bilinear", align_corners=False)
+
+        logits_2d = logits.squeeze(1)
+        valid = masks != self.ignore_index
+        if not valid.any():
+            return logits_2d.sum() * 0.0
+
+        targets = masks.clamp(0, 1).to(dtype=logits_2d.dtype)
+        sample_losses = []
+        for sample_logits, sample_targets, sample_valid in zip(logits_2d, targets, valid):
+            if not sample_valid.any():
+                continue
+            valid_logits = sample_logits[sample_valid]
+            valid_targets = sample_targets[sample_valid]
+            positives = valid_targets.sum()
+            negatives = valid_targets.numel() - positives
+            if positives > 0:
+                pos_weight = (negatives / positives.clamp_min(1.0)).clamp(1.0, self.pos_weight_max)
+            else:
+                pos_weight = torch.ones((), device=logits.device, dtype=logits.dtype)
+            bce = F.binary_cross_entropy_with_logits(valid_logits, valid_targets, pos_weight=pos_weight)
+            probs = valid_logits.sigmoid()
+            tp = (probs * valid_targets).sum()
+            fp = (probs * (1.0 - valid_targets)).sum()
+            fn = ((1.0 - probs) * valid_targets).sum()
+            tversky_smooth = 0.5
+            tversky = 1.0 - (tp + tversky_smooth) / (
+                tp
+                + self.tversky_fp_weight * fp
+                + (1.0 - self.tversky_fp_weight) * fn
+                + tversky_smooth
+            )
+            false_positive = fp / negatives.clamp_min(1.0)
+            sample_loss = bce + tversky + self.false_positive_weight * false_positive
+            if apply_small_target_weight:
+                area_ratio = positives / valid_targets.numel()
+                is_small_target = bool((area_ratio <= self.small_target_area).detach().item())
+                if self.small_target_weight > 1.0 and is_small_target:
+                    sample_loss = sample_loss * self.small_target_weight
+            sample_losses.append(sample_loss)
+        return torch.stack(sample_losses).mean() if sample_losses else logits_2d.sum() * 0.0
+
+    def _downsample_binary_masks(self, masks, output_size):
+        """Downsample masks with foreground-preserving pooling for auxiliary supervision."""
+        valid = masks != self.ignore_index
+        targets = masks.clamp(0, 1).to(dtype=torch.float32).unsqueeze(1)
+        pooled_targets = F.adaptive_max_pool2d(targets, output_size).squeeze(1).to(dtype=masks.dtype)
+        invalid = (~valid).to(dtype=torch.float32).unsqueeze(1)
+        pooled_invalid = F.adaptive_max_pool2d(invalid, output_size).squeeze(1).bool()
+        return pooled_targets.masked_fill(pooled_invalid, self.ignore_index)
 
     def __call__(self, preds, batch):
         """Compute pixel-wise cross-entropy between logits and semantic masks."""
         logits = preds[0] if isinstance(preds, (list, tuple)) else preds
+        auxiliary_logits = list(preds[1:]) if isinstance(preds, (list, tuple)) else []
         if not isinstance(logits, torch.Tensor) or logits.ndim != 4:
             raise TypeError(f"Semantic segmentation predictions must be a BCHW tensor, got {type(logits)}.")
 
@@ -640,51 +697,21 @@ class SemanticSegmentationLoss:
         if masks.ndim != 3:
             raise TypeError(f"Semantic segmentation masks must be shaped [B, H, W], got {tuple(masks.shape)}.")
 
-        if logits.shape[-2:] != masks.shape[-2:]:
-            logits = F.interpolate(logits, size=masks.shape[-2:], mode="bilinear", align_corners=False)
-
         masks = masks.to(device=logits.device, dtype=torch.long)
         if logits.shape[1] == 1:
-            logits_2d = logits.squeeze(1)
-            valid = masks != self.ignore_index
-            if not valid.any():
-                loss = logits_2d.sum() * 0.0
-            else:
-                targets = masks.clamp(0, 1).to(dtype=logits_2d.dtype)
-                sample_losses = []
-                for sample_logits, sample_targets, sample_valid in zip(logits_2d, targets, valid):
-                    if not sample_valid.any():
-                        continue
-                    valid_logits = sample_logits[sample_valid]
-                    valid_targets = sample_targets[sample_valid]
-                    positives = valid_targets.sum()
-                    negatives = valid_targets.numel() - positives
-                    if positives > 0:
-                        pos_weight = (negatives / positives.clamp_min(1.0)).clamp(1.0, self.pos_weight_max)
-                    else:
-                        pos_weight = torch.ones((), device=logits.device, dtype=logits.dtype)
-                    bce = F.binary_cross_entropy_with_logits(valid_logits, valid_targets, pos_weight=pos_weight)
-                    probs = valid_logits.sigmoid()
-                    tp = (probs * valid_targets).sum()
-                    fp = (probs * (1.0 - valid_targets)).sum()
-                    fn = ((1.0 - probs) * valid_targets).sum()
-                    tversky_smooth = 0.5
-                    tversky = 1.0 - (tp + tversky_smooth) / (
-                        tp
-                        + self.tversky_fp_weight * fp
-                        + (1.0 - self.tversky_fp_weight) * fn
-                        + tversky_smooth
-                    )
-                    false_positive = fp / negatives.clamp_min(1.0)
-                    sample_loss = bce + tversky + self.false_positive_weight * false_positive
-                    area_ratio = positives / valid_targets.numel()
-                    is_small_target = bool((area_ratio <= self.small_target_area).detach().item())
-                    if self.small_target_weight > 1.0 and is_small_target:
-                        sample_loss = sample_loss * self.small_target_weight
-                    sample_losses.append(sample_loss)
-                loss = torch.stack(sample_losses).mean() if sample_losses else logits_2d.sum() * 0.0
+            loss = self._binary_mask_loss(logits, masks, apply_small_target_weight=True)
+            auxiliary_weights = (self.aux_p3_weight, self.aux_p4_weight)
+            for aux_logits, aux_weight in zip(auxiliary_logits, auxiliary_weights):
+                if aux_weight <= 0.0:
+                    continue
+                aux_masks = self._downsample_binary_masks(masks, aux_logits.shape[-2:])
+                loss = loss + aux_weight * self._binary_mask_loss(
+                    aux_logits, aux_masks, apply_small_target_weight=False
+                )
             return loss, loss.detach().view(1)
 
+        if logits.shape[-2:] != masks.shape[-2:]:
+            logits = F.interpolate(logits, size=masks.shape[-2:], mode="bilinear", align_corners=False)
         loss = self.criterion(logits, masks)
         return loss, loss.detach().unsqueeze(0)
 

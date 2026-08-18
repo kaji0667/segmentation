@@ -58,3 +58,9 @@
 - 新增按 oIoU 或 mIoU 选择验证 checkpoint 的能力。
 - 新增训练完成后加载最佳 checkpoint、冻结验证阈值并评估 test split 的流程。
 - test 报告同时记录 Pr@0.5 至 Pr@0.9、类别指标、参数量、checkpoint 大小、平均评测耗时和峰值 GPU 显存。
+
+### 9. 固定权重 P3/P4 多尺度深监督候选
+- 在现有 `TextPromptSegment` 上增加训练期文本条件 P3/P4 辅助 mask，固定损失权重分别为 `0.20/0.10`，不增加 P5 辅助监督。
+- 辅助标签使用保留前景的最大池化下采样；主输出继续使用现有 BCE+Tversky、小目标加权和两个可学习 spatial-gate 权重。
+- 验证和推理仍只返回最终 mask，不改变官方评测协议。
+- 新增脚本预设 `ds`，默认实验目录为 `runs/semseg/ds_p3p4`；尚未运行完整训练，不能称为已验证提升。
