@@ -407,3 +407,25 @@ GPU=0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 SAVE_DIR=runs/semseg/ds_p3
 
 Interpretation constraint:
 - This is an experimental candidate, not a confirmed improvement. Compare it against `rrsisd_learnable_gate_official_seed42` using oIoU, official mIoU, Pr@0.5-0.9, per-category mIoU, precision/recall, and predicted-positive versus target-positive rates.
+
+### P3-Only Follow-up Preset
+
+Result-driven decision:
+- The completed P3/P4 run improved validation sample mIoU and several categories, but official test oIoU and high-IoU success rates did not improve.
+- Bridge, tenniscourt, windmill, and overpass regressed, consistent with a possible coarse P4 auxiliary-target effect.
+- The raw best validation epoch was not saved because its improvement over `best.pt` was about `0.00097`, just below the previous `min_delta=0.001`.
+
+Changes:
+- Added `ds_p3` preset with fixed `P3=0.20`, `P4=0.0`.
+- Set the preset-specific `min_delta=0.0002`.
+- Kept the original `ds` preset unchanged for reproduction.
+- Default output is `runs/semseg/ds_p3`.
+
+Run command:
+
+```bash
+GPU=0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 SAVE_DIR=runs/semseg/ds_p3 bash run_semseg_preset.sh ds_p3
+```
+
+Status:
+- Script-only follow-up configuration; full training has not been started by Codex.

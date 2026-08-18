@@ -106,6 +106,26 @@ case "$preset" in
       --save-dir "${SAVE_DIR:-runs/semseg/ds_p3p4}"
     )
     ;;
+  ds_p3)
+    preset_args=(
+      --batch "${BATCH:-4}"
+      --epochs "${EPOCHS:-60}"
+      --patience "${PATIENCE:-8}"
+      --min-delta 0.0002
+      --pos-weight-max 10
+      --small-target-boost 1.5
+      --small-target-area 0.0025
+      --loss-small-target-weight 1.5
+      --loss-small-target-area 0.0025
+      --loss-tversky-fp-weight 0.5
+      --loss-fp-weight 0.0
+      --loss-aux-p3-weight 0.20
+      --loss-aux-p4-weight 0.0
+      --val-thresholds 0.6,0.7,0.8,0.85,0.9,0.95
+      --val-select-metric oiou
+      --save-dir "${SAVE_DIR:-runs/semseg/ds_p3}"
+    )
+    ;;
   smoke)
     preset_args=(
       --batch "${BATCH:-2}"
@@ -119,7 +139,7 @@ case "$preset" in
     ;;
   *)
     echo "Unknown preset: $preset" >&2
-    echo "Available presets: baseline, precision, strict, ds, smoke" >&2
+    echo "Available presets: baseline, precision, strict, ds, ds_p3, smoke" >&2
     exit 2
     ;;
 esac

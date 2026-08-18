@@ -95,3 +95,5 @@ flowchart LR
 ```
 
 The auxiliary masks use the same BCE-Tversky objective as the final mask. Their targets are foreground-preserving downsampled masks. P5 has no auxiliary loss in the first experiment. Auxiliary outputs are disabled during validation and inference, so the official evaluation interface continues to receive only the final mask logits.
+
+The follow-up `ds_p3` ablation disables the P4 auxiliary loss and retains only `0.20 × P3 loss`. Its preset uses `min_delta=0.0002` so small but real validation improvements can replace `best.pt`. The original `ds` preset remains unchanged for reproducibility of the completed P3/P4 run.

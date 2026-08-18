@@ -21,6 +21,8 @@ The current FPN-style `TextPromptSegment` fuses P3/P4/P5 and applies the binary 
 
 The controlled preset is `run_semseg_preset.sh ds`, with default output `runs/semseg/ds_p3p4`.
 
+After the first completed P3/P4 run, a follow-up controlled preset `ds_p3` keeps P3 at `0.20`, disables P4, and lowers `min_delta` from `0.001` to `0.0002`. This isolates whether the coarse P4 auxiliary target caused regressions on thin or boundary-sensitive classes while allowing smaller validation improvements to update `best.pt`.
+
 ## Alternatives
 
 - Supervise P3/P4/P5 equally. Rejected for the first run because coarse P5 labels can harm small targets and make attribution harder.
