@@ -77,3 +77,10 @@
 - 新增 `best_raw.pt`：selection score 只要严格创新高就保存，不受 `min_delta` 影响。
 - `best.pt` 继续保留原有 `min_delta` 与 early stopping 语义。
 - 训练后 test 优先评估 `best_raw.pt`，旧实验缺失时回退 `best.pt`，并冻结该 checkpoint 保存的验证阈值。
+
+### 12. 官方 mIoU 选模完整实验结果
+- 完整实验 `runs/semseg/base_miou` 在第 36 轮早停，按验证 mIoU 选中第 28 轮，阈值为 `0.70`。
+- test：`oIoU=0.672197`、`mIoU=0.509192`、`class_macro_mIoU=0.536258`、`F1=0.803969`。
+- 相比原 learnable-gate 正式基线，mIoU 仅增加 `0.000176`，但 oIoU 下降 `0.019627`、F1 下降 `0.013875`、Pr@0.9 下降 `0.020396`。
+- harbor 明显改善，类别宏平均略升；同时 Precision 下降、预测正像素率上升，说明外溢加重。
+- 结论：保留 raw-best 保存机制，但该实验不替代原综合最好 checkpoint。

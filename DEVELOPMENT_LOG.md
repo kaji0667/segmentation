@@ -466,3 +466,38 @@ Verification:
 - `bash -n run_semseg_preset.sh`: passed.
 - GPU smoke with 2 train, 2 validation, and 2 test batches: passed after correcting one stale report variable name.
 - Smoke output created `last.pt`, `best.pt`, and `best_raw.pt`; `test_results.json` recorded `checkpoint=.../best_raw.pt`, `checkpoint_selection_metric=miou`, and `threshold_source=raw-best validation checkpoint`.
+
+### Full Official-mIoU Selection Experiment
+
+Command:
+```bash
+GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
+SAVE_DIR=runs/semseg/base_miou bash run_semseg_preset.sh baseline
+```
+
+Execution:
+- Completed successfully on the RTX 4060 Laptop GPU.
+- Early stopped after epoch 36; summed epoch time was about 3.54 hours.
+- Validation selected epoch 28 by official mIoU: `mIoU=0.523579`, `oIoU=0.676562`, threshold `0.70`.
+- `best_raw.pt` and `best.pt` both ended at epoch 28; epoch 25 independently demonstrated the new behavior by updating only `best_raw.pt` for a sub-`min_delta` mIoU gain.
+- Full test evaluated all 3,481 samples with the frozen validation threshold and loaded `best_raw.pt`.
+
+Test result:
+- `oIoU=0.672197`
+- `mIoU=0.509192`
+- `class_macro_mIoU=0.536258`
+- `precision=0.774748`, `recall=0.835480`, `F1=0.803969`
+- `Pr@0.5/0.7/0.8/0.9=0.558460/0.381212/0.272336/0.126688`
+- `pred_pos_rate=0.050308`, target positive rate `0.046652`
+
+Comparison with `rrsisd_learnable_gate_official_seed42`:
+- mIoU changed by only `+0.000176`, effectively a tie without repeated-seed evidence.
+- class-macro mIoU improved by `+0.005646`, led by harbor `+0.077195`.
+- oIoU regressed by `-0.019627`, F1 by `-0.013875`, precision by `-0.050674`, and Pr@0.9 by `-0.020396`.
+- Recall increased by `+0.025077` and predicted-positive rate by `+0.004506`, indicating more foreground coverage and more overflow.
+- Bridge, Expressway-Service-area, windmill, baseballfield, and airport were the largest category regressions.
+
+Decision:
+- The raw-best checkpoint mechanism is verified and retained.
+- This run does not replace the previous learnable-gate checkpoint as the best balanced model.
+- Official-mIoU-only selection improves category balance slightly but does not solve weak-instance consistency and sacrifices cumulative overlap and high-IoU success rates.
