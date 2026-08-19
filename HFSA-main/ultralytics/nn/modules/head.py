@@ -276,18 +276,6 @@ class TextPromptSegment(nn.Module):
             Conv(hidden, hidden, 3),
             nn.Conv2d(hidden, 1, 1),
         )
-        self.aux_scale_count = min(self.nl, 2)
-        self.deep_supervision_enabled = False
-        self.aux_pixel_proj = nn.ModuleList(
-            nn.Conv2d(hidden, embed_dim, 1) for _ in range(self.aux_scale_count)
-        )
-        self.aux_mask_decoder = nn.ModuleList(
-            nn.Sequential(
-                Conv(embed_dim + 1, hidden, 3),
-                nn.Conv2d(hidden, 1, 1),
-            )
-            for _ in range(self.aux_scale_count)
-        )
         self.bias = nn.Parameter(torch.zeros(1))
 
     def forward(
@@ -315,19 +303,9 @@ class TextPromptSegment(nn.Module):
                 text_vector = text_vector.mean(1)
 
         scale_weight = (torch.softmax(self.scale_gate(text_vector), dim=1) * self.nl).view(bs, self.nl, 1, 1, 1)
-        normalized_text_embedding = nn.functional.normalize(self.text_proj(text_vector), dim=1).view(
-            bs, self.embed_dim, 1, 1
-        )
         feats = []
-        auxiliary_logits = []
         for i, feat in enumerate(x):
             feat = self.proj[i](feat)
-            if self.training and self.deep_supervision_enabled and i < self.aux_scale_count:
-                aux_visual = nn.functional.normalize(self.aux_pixel_proj[i](feat), dim=1)
-                aux_similarity = (aux_visual * normalized_text_embedding).sum(1, keepdim=True)
-                auxiliary_logits.append(
-                    self.aux_mask_decoder[i](torch.cat([aux_visual, aux_similarity], dim=1))
-                )
             if feat.shape[-2:] != target_size:
                 feat = nn.functional.interpolate(feat, size=target_size, mode="bilinear", align_corners=False)
             feat = feat * scale_weight[:, i]
@@ -337,9 +315,11 @@ class TextPromptSegment(nn.Module):
         gamma, beta = self.film(text_vector).chunk(2, dim=1)
         gamma = torch.tanh(gamma).view(bs, self.embed_dim, 1, 1)
         beta = beta.view(bs, self.embed_dim, 1, 1)
+        text_embedding = self.text_proj(text_vector).view(bs, self.embed_dim, 1, 1)
         visual = visual * (1.0 + gamma) + beta
         visual_norm = nn.functional.normalize(visual, dim=1)
-        similarity = (visual_norm * normalized_text_embedding).sum(1, keepdim=True)
+        text_embedding = nn.functional.normalize(text_embedding, dim=1)
+        similarity = (visual_norm * text_embedding).sum(1, keepdim=True)
 
         key = nn.functional.normalize(self.key_proj(visual), dim=1)
         value = self.value_proj(visual)
@@ -358,8 +338,6 @@ class TextPromptSegment(nn.Module):
         logits = logits + similarity + self.bias
         if self.upsample > 1:
             logits = nn.functional.interpolate(logits, scale_factor=self.upsample, mode="bilinear", align_corners=False)
-        if self.training and self.deep_supervision_enabled and auxiliary_logits:
-            return (logits, *auxiliary_logits)
         return logits
 
 

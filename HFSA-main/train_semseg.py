@@ -100,8 +100,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--loss-small-target-area", type=float, default=0.0025, help="Foreground mask area ratio threshold for area-aware loss weighting.")
     parser.add_argument("--loss-tversky-fp-weight", type=float, default=0.5, help="Tversky false-positive weight for binary mask loss; >0.5 penalizes over-segmentation more.")
     parser.add_argument("--loss-fp-weight", type=float, default=0.0, help="Extra mean foreground-probability penalty on GT background pixels; 0 disables.")
-    parser.add_argument("--loss-aux-p3-weight", type=float, default=0.0, help="Fixed P3 auxiliary mask loss weight; 0 disables P3 deep supervision.")
-    parser.add_argument("--loss-aux-p4-weight", type=float, default=0.0, help="Fixed P4 auxiliary mask loss weight; 0 disables P4 deep supervision.")
     parser.add_argument("--small-target-boost", type=float, default=2.0, help="Sampler multiplier for small-mask/bbox samples; 1 disables.")
     parser.add_argument("--small-target-area", type=float, default=0.0025, help="Area ratio threshold for small-target sampler boosting.")
     parser.add_argument("--augment", action=argparse.BooleanOptionalAction, default=True, help="Enable lightweight train-time RRSIS-D image/mask augmentation.")
@@ -1236,12 +1234,6 @@ def main() -> None:
     model.loss_small_target_area = float(args.loss_small_target_area)
     model.loss_tversky_fp_weight = float(args.loss_tversky_fp_weight)
     model.loss_fp_weight = float(args.loss_fp_weight)
-    model.loss_aux_p3_weight = max(float(args.loss_aux_p3_weight), 0.0)
-    model.loss_aux_p4_weight = max(float(args.loss_aux_p4_weight), 0.0)
-    deep_supervision_enabled = model.loss_aux_p3_weight > 0.0 or model.loss_aux_p4_weight > 0.0
-    for module in model.modules():
-        if hasattr(module, "deep_supervision_enabled"):
-            module.deep_supervision_enabled = deep_supervision_enabled
     trainable_params = configure_trainable_layers(model, args)
     if trainable_params <= 0:
         raise RuntimeError("No trainable parameters remain after applying freeze options.")
@@ -1281,11 +1273,6 @@ def main() -> None:
     print(
         "loss over-segmentation: "
         f"tversky_fp_weight={args.loss_tversky_fp_weight}, fp_weight={args.loss_fp_weight}"
-    )
-    print(
-        "loss deep supervision: "
-        f"enabled={deep_supervision_enabled}, p3_weight={model.loss_aux_p3_weight}, "
-        f"p4_weight={model.loss_aux_p4_weight}"
     )
     print(
         "train augmentation: "

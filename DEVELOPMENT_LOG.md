@@ -429,3 +429,25 @@ GPU=0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 SAVE_DIR=runs/semseg/ds_p3
 
 Status:
 - Script-only follow-up configuration; full training has not been started by Codex.
+
+## 2026-08-19
+
+### Deep-Supervision Results and Baseline Restoration
+
+Completed results:
+- No-deep-supervision baseline test: `oIoU=0.691823`, `mIoU=0.509016`, `class_macro_mIoU=0.530612`.
+- P3/P4 deep supervision test: `oIoU=0.685367`, `mIoU=0.508498`, `class_macro_mIoU=0.532307`.
+- P3-only deep supervision test: `oIoU=0.671189`, `mIoU=0.493307`, `class_macro_mIoU=0.521660`.
+- P3-only also reduced `Pr@0.8` from `0.294168` to `0.260557` and regressed most categories, despite improving harbor.
+
+Interpretation:
+- Removing P4 did not recover performance, so coarse P4 auxiliary targets were not the sole cause.
+- Directly forcing shallow P3 features to solve the full referring-mask task likely conflicted with the final multi-scale, text-conditioned objective.
+- The current bottleneck is not insufficient P3/P4 supervision; raw-scale auxiliary mask supervision is rejected as the active direction.
+
+Rollback:
+- Removed P3/P4 auxiliary modules from `TextPromptSegment`.
+- Restored the original single-output BCE-Tversky loss path.
+- Removed auxiliary-loss CLI parameters, `ds`/`ds_p3` presets, and the deep-supervision regression test.
+- Retained the two learnable spatial-gate weights and official RRSIS-D evaluation implementation.
+- Preserved `runs/semseg/ds_p3p4` and `runs/semseg/ds_p3` as experiment evidence.

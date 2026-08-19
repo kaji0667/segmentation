@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as a controlled experimental candidate. It is not yet a confirmed metric improvement.
+Superseded by ADR-0006. The completed P3/P4 and P3-only runs did not improve the official test result, so this design is no longer part of the active model.
 
 ## Context
 
@@ -36,6 +36,13 @@ After the first completed P3/P4 run, a follow-up controlled preset `ds_p3` keeps
 - Adds no auxiliary branch computation during validation or inference.
 - Preserves the two existing learnable spatial-gate weights.
 - Requires a seed-42 controlled run against `rrsisd_learnable_gate_official_seed42` before any improvement claim.
+
+## Outcome
+
+- `ds_p3p4` test: `oIoU=0.685367`, `mIoU=0.508498`, below the no-deep-supervision baseline `oIoU=0.691823`, `mIoU=0.509016`.
+- `ds_p3` test: `oIoU=0.671189`, `mIoU=0.493307`, a clear regression.
+- P3-only supervision disproved the hypothesis that the coarse P4 auxiliary target was the main cause of the regression.
+- The source code, loss parameters, presets, and auxiliary-head test were removed. Experiment directories remain under `runs/semseg/` as evidence.
 
 ## Related
 

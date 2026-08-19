@@ -74,26 +74,8 @@ The semantic segmentation entry now distinguishes the published RRSIS-D metrics 
 
 Validation may select a checkpoint by oIoU or official mIoU. Optional test evaluation loads the best validation checkpoint and reuses its frozen validation-selected mask threshold. It does not scan thresholds on the test split. See ADR-0004.
 
-## Experimental P3/P4 Deep Supervision
+## Rejected Deep-Supervision Experiment
 
-ADR-0005 adds a controlled, training-only deep-supervision candidate to the FPN-style `TextPromptSegment`:
+ADR-0005 evaluated fixed text-conditioned auxiliary mask losses on P3/P4 and P3-only. Neither configuration improved the official test result, and P3-only caused a clear regression. ADR-0006 therefore restores the active architecture to the no-deep-supervision learnable-gate baseline.
 
-```mermaid
-flowchart LR
-    P3["P3 / 8"] --> A3["Text-conditioned auxiliary head"] --> M3["P3 mask"] --> L3["0.20 × auxiliary loss"]
-    P4["P4 / 16"] --> A4["Text-conditioned auxiliary head"] --> M4["P4 mask"] --> L4["0.10 × auxiliary loss"]
-    P3 --> F["Existing P3/P4/P5 fusion"]
-    P4 --> F
-    P5["P5 / 32"] --> F
-    T["OpenCLIP text vector"] --> A3
-    T --> A4
-    T --> F
-    F --> G["FiLM + similarity + attention + learnable spatial gate"] --> D["Existing mask decoder"] --> MF["Final mask"] --> LF["1.0 × main loss"]
-    L3 --> LT["Total training loss"]
-    L4 --> LT
-    LF --> LT
-```
-
-The auxiliary masks use the same BCE-Tversky objective as the final mask. Their targets are foreground-preserving downsampled masks. P5 has no auxiliary loss in the first experiment. Auxiliary outputs are disabled during validation and inference, so the official evaluation interface continues to receive only the final mask logits.
-
-The follow-up `ds_p3` ablation disables the P4 auxiliary loss and retains only `0.20 × P3 loss`. Its preset uses `min_delta=0.0002` so small but real validation improvements can replace `best.pt`. The original `ds` preset remains unchanged for reproducibility of the completed P3/P4 run.
+The current `TextPromptSegment` has one output path: P3/P4/P5 fusion, FiLM, similarity and attention, the two learnable spatial-gate weights, and the final mask decoder. Only the final mask receives the BCE-Tversky training loss. The failed experiment directories remain under `runs/semseg/ds_p3p4` and `runs/semseg/ds_p3` for reproducibility.
