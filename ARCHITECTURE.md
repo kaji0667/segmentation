@@ -83,3 +83,9 @@ The current `TextPromptSegment` has one output path: P3/P4/P5 fusion, FiLM, simi
 ## Checkpoint Selection and Retention
 
 The standard semantic-segmentation baseline selects both the validation threshold and checkpoint score by official sample mIoU. `best.pt` retains the historical `min_delta` rule used by early stopping, while `best_raw.pt` records every strict raw maximum without applying `min_delta`. Test-after-train prefers `best_raw.pt`, falls back to legacy `best.pt`, and always reuses the checkpoint's validation-selected threshold. See ADR-0007.
+
+## Learnable Text Token Pooling Candidate
+
+ADR-0008 adds a lightweight token-pooling adapter inside `TextPromptSegment`. Cached OpenCLIP token features are scored by a zero-initialized `Linear(768, 1)` and one learnable valid-token bias, then reduced with softmax-weighted pooling. Zero initialization reproduces the former fixed `tokens.mean(1)` behavior, so training determines whether particular contextual tokens and valid positions should receive more weight.
+
+This candidate adds 769 parameters and does not modify OpenCLIP, backbone, neck, P3/P4/P5 fusion, spatial-gate weights, decoder, loss, or evaluation. The heuristic object/spatial token masks are intentionally not used because they are not guaranteed to align with OpenCLIP BPE spans and may mark same-class reference objects.

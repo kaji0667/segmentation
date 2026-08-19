@@ -84,3 +84,9 @@
 - 相比原 learnable-gate 正式基线，mIoU 仅增加 `0.000176`，但 oIoU 下降 `0.019627`、F1 下降 `0.013875`、Pr@0.9 下降 `0.020396`。
 - harbor 明显改善，类别宏平均略升；同时 Precision 下降、预测正像素率上升，说明外溢加重。
 - 结论：保留 raw-best 保存机制，但该实验不替代原综合最好 checkpoint。
+
+### 13. 可学习文本 token 池化候选
+- 旧分割头对 `[B,77,768]` OpenCLIP token 固定平均，而验证表达平均只有约 6.69 个有效 token。
+- 新增零初始化 `Linear(768,1)` token scorer 和 `valid_token_bias`，初始化时复现旧 mean pooling，仅增加 769 参数。
+- 不使用存在 BPE 对齐和同类参照物歧义的启发式角色掩码。
+- 单元测试、代理 A 复审和 GPU smoke 已通过；完整实验目录为 `runs/semseg/tpool`。

@@ -501,3 +501,29 @@ Decision:
 - The raw-best checkpoint mechanism is verified and retained.
 - This run does not replace the previous learnable-gate checkpoint as the best balanced model.
 - Official-mIoU-only selection improves category balance slightly but does not solve weak-instance consistency and sacrifices cumulative overlap and high-IoU success rates.
+
+## 2026-08-20
+
+### Learnable Text Token Pooling Candidate
+
+Diagnosis:
+- Cached OpenCLIP inputs have shape `[N,77,768]`, while the active head used unconditional `tokens.mean(1)`.
+- Validation expressions contain 6.69 valid tokens on average.
+
+Changes:
+- Added a zero-initialized bias-free `Linear(768,1)` token scorer and one zero-initialized valid-token bias.
+- Softmax-weighted pooling is mathematically equal to old mean pooling at initialization.
+- Added 769 parameters; OpenCLIP, image backbone/neck, decoder, loss, spatial-gate weights, and evaluation remain unchanged.
+- Rejected object/spatial role residuals after independent review found BPE alignment and distractor-object ambiguity.
+
+Evidence:
+- Literature basis: CLIP-Adapter (2110.04544), Global-Local Context Features (2303.17811), RMSIN (2312.12470), RSRefSeg (2501.06809).
+- Python compilation and 3 focused unit tests passed.
+- Independent agent-A review found no blocking issue or redundant fallback code.
+- GPU smoke passed 2 train, 2 validation, and 2 test batches and saved all expected checkpoints/reports under `runs/semseg/tpool_smoke`.
+
+Full command:
+```bash
+GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
+SAVE_DIR=runs/semseg/tpool bash run_semseg_preset.sh baseline
+```

@@ -258,6 +258,9 @@ class TextPromptSegment(nn.Module):
         )
         self.pixel_proj = nn.Conv2d(hidden, embed_dim, 1)
         self.class_embed = nn.Embedding(nc, self.text_dim)
+        self.text_token_score = nn.Linear(self.text_dim, 1, bias=False)
+        self.valid_token_bias = nn.Parameter(torch.zeros(1))
+        nn.init.zeros_(self.text_token_score.weight)
         self.text_proj = nn.Linear(self.text_dim, embed_dim)
         self.query_proj = nn.Linear(self.text_dim, embed_dim)
         self.key_proj = nn.Conv2d(embed_dim, embed_dim, 1)
@@ -277,6 +280,19 @@ class TextPromptSegment(nn.Module):
             nn.Conv2d(hidden, 1, 1),
         )
         self.bias = nn.Parameter(torch.zeros(1))
+
+    def _pool_text_tokens(
+        self,
+        text_tokens,
+        text_token_mask=None,
+    ):
+        """Learn token importance while exactly matching mean pooling at initialization."""
+        scores = self.text_token_score(text_tokens).squeeze(-1)
+        if text_token_mask is not None:
+            valid_mask = text_token_mask.to(device=text_tokens.device, dtype=text_tokens.dtype)
+            scores = scores + self.valid_token_bias * valid_mask
+        weights = torch.softmax(scores, dim=1)
+        return torch.sum(text_tokens * weights.unsqueeze(-1), dim=1)
 
     def forward(
         self,
@@ -300,7 +316,10 @@ class TextPromptSegment(nn.Module):
         else:
             text_vector = text_embedding.to(device=device, dtype=x[0].dtype)
             if text_vector.ndim == 3:
-                text_vector = text_vector.mean(1)
+                text_vector = self._pool_text_tokens(
+                    text_vector,
+                    text_token_mask=text_token_mask,
+                )
 
         scale_weight = (torch.softmax(self.scale_gate(text_vector), dim=1) * self.nl).view(bs, self.nl, 1, 1, 1)
         feats = []
