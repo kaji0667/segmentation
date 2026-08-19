@@ -451,3 +451,18 @@ Rollback:
 - Removed auxiliary-loss CLI parameters, `ds`/`ds_p3` presets, and the deep-supervision regression test.
 - Retained the two learnable spatial-gate weights and official RRSIS-D evaluation implementation.
 - Preserved `runs/semseg/ds_p3p4` and `runs/semseg/ds_p3` as experiment evidence.
+
+### Official-mIoU Raw-Best Checkpoint Retention
+
+Changes:
+- The standard `baseline` preset now passes `--val-select-metric miou`.
+- Added `best_raw.pt`, saved on every strict validation selection-score maximum without applying `min_delta`.
+- Kept `best.pt` and early stopping under the existing `min_delta` rule.
+- Test-after-train now prefers `best_raw.pt`, falls back to legacy `best.pt`, and records the checkpoint selection metric and threshold source.
+
+Verification:
+- `python -m py_compile train_semseg.py tests/test_semseg_checkpoint_selection.py`: passed.
+- `python tests/test_semseg_checkpoint_selection.py -v`: passed (3 tests).
+- `bash -n run_semseg_preset.sh`: passed.
+- GPU smoke with 2 train, 2 validation, and 2 test batches: passed after correcting one stale report variable name.
+- Smoke output created `last.pt`, `best.pt`, and `best_raw.pt`; `test_results.json` recorded `checkpoint=.../best_raw.pt`, `checkpoint_selection_metric=miou`, and `threshold_source=raw-best validation checkpoint`.

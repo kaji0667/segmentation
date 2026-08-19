@@ -79,3 +79,7 @@ Validation may select a checkpoint by oIoU or official mIoU. Optional test evalu
 ADR-0005 evaluated fixed text-conditioned auxiliary mask losses on P3/P4 and P3-only. Neither configuration improved the official test result, and P3-only caused a clear regression. ADR-0006 therefore restores the active architecture to the no-deep-supervision learnable-gate baseline.
 
 The current `TextPromptSegment` has one output path: P3/P4/P5 fusion, FiLM, similarity and attention, the two learnable spatial-gate weights, and the final mask decoder. Only the final mask receives the BCE-Tversky training loss. The failed experiment directories remain under `runs/semseg/ds_p3p4` and `runs/semseg/ds_p3` for reproducibility.
+
+## Checkpoint Selection and Retention
+
+The standard semantic-segmentation baseline selects both the validation threshold and checkpoint score by official sample mIoU. `best.pt` retains the historical `min_delta` rule used by early stopping, while `best_raw.pt` records every strict raw maximum without applying `min_delta`. Test-after-train prefers `best_raw.pt`, falls back to legacy `best.pt`, and always reuses the checkpoint's validation-selected threshold. See ADR-0007.

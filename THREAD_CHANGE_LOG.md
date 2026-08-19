@@ -71,3 +71,9 @@
 - P3-only测试进一步下降到 `oIoU=0.671189`、`mIoU=0.493307`，说明问题不只是P4粗尺度监督。
 - 已从活动源码移除P3/P4辅助头、辅助损失参数及`ds`/`ds_p3`预设，恢复两个可学习spatial-gate权重的无深监督基线。
 - 两个实验目录继续保留，作为失败尝试和复现实证。
+
+### 11. 按官方 mIoU 保存 raw-best checkpoint
+- 标准 `baseline` 预设改为按论文口径的逐样本 mIoU 选择验证阈值和 checkpoint。
+- 新增 `best_raw.pt`：selection score 只要严格创新高就保存，不受 `min_delta` 影响。
+- `best.pt` 继续保留原有 `min_delta` 与 early stopping 语义。
+- 训练后 test 优先评估 `best_raw.pt`，旧实验缺失时回退 `best.pt`，并冻结该 checkpoint 保存的验证阈值。

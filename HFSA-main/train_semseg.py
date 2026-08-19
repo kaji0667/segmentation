@@ -391,6 +391,24 @@ def validation_selection_score(metrics: Dict[str, Any], select_metric: str) -> f
     raise ValueError(f"Unsupported validation selection metric: {select_metric}")
 
 
+def checkpoint_improvement_flags(
+    fitness: float,
+    best_fitness: float,
+    best_raw_fitness: float,
+    min_delta: float,
+) -> Tuple[bool, bool]:
+    """Return min-delta and raw checkpoint improvement decisions."""
+    return fitness > best_fitness + min_delta, fitness > best_raw_fitness
+
+
+def select_test_checkpoint(weights_dir: Path) -> Path:
+    """Prefer the strict raw-best checkpoint while supporting legacy runs."""
+    best_raw_path = weights_dir / "best_raw.pt"
+    if best_raw_path.exists():
+        return best_raw_path
+    return weights_dir / "best.pt"
+
+
 def _safe_tag(value: str) -> str:
     return "".join(ch if ch.isalnum() else "-" for ch in str(value)).strip("-") or "default"
 
@@ -1288,6 +1306,7 @@ def main() -> None:
         print(f"save dir: {save_dir}")
 
     best_fitness = -float("inf")
+    best_raw_fitness = -float("inf")
     epochs_without_improvement = 0
     last_confusion = None
 
@@ -1458,7 +1477,16 @@ def main() -> None:
             last_path = weights_dir / "last.pt"
             save_checkpoint(last_path, model, optimizer, epoch + 1, args, data, checkpoint_metrics)
             fitness = float(val_metrics["selection_score"]) if val_metrics else -train_loss
-            improved = fitness > best_fitness + float(args.min_delta)
+            improved, raw_improved = checkpoint_improvement_flags(
+                fitness,
+                best_fitness,
+                best_raw_fitness,
+                float(args.min_delta),
+            )
+            if raw_improved:
+                best_raw_fitness = fitness
+                save_checkpoint(weights_dir / "best_raw.pt", model, optimizer, epoch + 1, args, data, checkpoint_metrics)
+                print(f"saved raw-best checkpoint: {weights_dir / 'best_raw.pt'}")
             if improved:
                 best_fitness = fitness
                 epochs_without_improvement = 0
@@ -1484,10 +1512,10 @@ def main() -> None:
             break
 
     if test_loader is not None:
-        best_path = weights_dir / "best.pt"
-        if not best_path.exists():
-            raise FileNotFoundError(f"Cannot run test evaluation without best checkpoint: {best_path}")
-        checkpoint = torch.load(best_path, map_location=device, weights_only=False)
+        test_checkpoint_path = select_test_checkpoint(weights_dir)
+        if not test_checkpoint_path.exists():
+            raise FileNotFoundError(f"Cannot run test evaluation without best checkpoint: {test_checkpoint_path}")
+        checkpoint = torch.load(test_checkpoint_path, map_location=device, weights_only=False)
         model.load_state_dict(checkpoint["model"], strict=True)
         checkpoint_metrics = checkpoint.get("metrics", {})
         test_threshold = float(checkpoint_metrics.get("best_threshold", val_thresholds[0]))
@@ -1519,9 +1547,14 @@ def main() -> None:
         evaluated_samples = max(int(test_metrics["evaluated_samples"]), 1)
         test_report = {
             "split": "test",
-            "checkpoint": str(best_path),
+            "checkpoint": str(test_checkpoint_path),
             "checkpoint_epoch": int(checkpoint.get("epoch", 0)),
-            "threshold_source": "best validation checkpoint",
+            "checkpoint_selection_metric": args.val_select_metric,
+            "threshold_source": (
+                "raw-best validation checkpoint"
+                if test_checkpoint_path.name == "best_raw.pt"
+                else "legacy best validation checkpoint"
+            ),
             "threshold": test_threshold,
             "evaluated_samples": int(test_metrics["evaluated_samples"]),
             "oIoU": test_metrics["oiou"],
@@ -1542,7 +1575,7 @@ def main() -> None:
             "class_oIoU": test_metrics["text_class_iou"],
             "total_parameters": sum(parameter.numel() for parameter in model.parameters()),
             "trainable_parameters": sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad),
-            "checkpoint_size_mb": best_path.stat().st_size / (1024**2),
+            "checkpoint_size_mb": test_checkpoint_path.stat().st_size / (1024**2),
             "evaluation_seconds": test_seconds,
             "mean_ms_per_sample": test_seconds * 1000.0 / evaluated_samples,
             "peak_gpu_memory_mb": (

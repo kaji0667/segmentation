@@ -56,6 +56,7 @@ case "$preset" in
       --loss-small-target-weight 1.5
       --loss-small-target-area 0.0025
       --val-thresholds 0.6,0.7,0.8,0.85,0.9,0.95
+      --val-select-metric miou
       --save-dir "${SAVE_DIR:-runs/semseg/rrsisd_baseline_b${BATCH:-8}_seed${SEED:-42}}"
     )
     ;;
