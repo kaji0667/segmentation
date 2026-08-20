@@ -310,9 +310,6 @@ def _load_text_embeddings(path: str | Path) -> Dict[str, Any]:
         raise ValueError(f"Text embedding count mismatch in {path}: {len(ids)} ids vs {embeddings.shape[0]} vectors")
     optional_masks = {
         "text_token_mask": payload.get("token_masks"),
-        "text_object_mask": payload.get("object_token_masks"),
-        "text_spatial_mask": payload.get("spatial_token_masks"),
-        "text_context_mask": payload.get("context_token_masks"),
     }
     for name, value in optional_masks.items():
         if value is not None and int(value.shape[0]) != int(len(ids)):

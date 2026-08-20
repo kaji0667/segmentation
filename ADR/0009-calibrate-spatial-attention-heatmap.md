@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as a controlled experiment. Metric improvement remains unconfirmed until the full seed-42 run finishes.
+Rejected as the mainline after the full seed-42 controlled experiment.
 
 ## Context
 
@@ -40,3 +40,11 @@ This makes the attention channel poorly scaled for both the spatial gate and the
 - `HFSA-main/tests/test_semseg_spatial_attention.py`
 - `ADR/0008-learnable-token-pooling.md`
 - `DEVELOPMENT_LOG.md`
+
+## Outcome
+
+- The full run selected epoch 29 and evaluated all 3,481 test samples at the frozen validation threshold `0.70`.
+- Test result: `oIoU=0.678791`, `mIoU=0.514869`, class-macro mIoU `0.538315`, precision `0.796597`, recall `0.821107`, and `Pr@0.9=0.128699`.
+- Against `runs/semseg/tpool`, oIoU regressed by `0.004630`, mIoU by `0.004949`, class-macro mIoU by `0.006695`, recall by `0.015892`, and `Pr@0.9` by `0.008905`; precision improved by `0.008254`.
+- The map reduced predicted foreground area but made masks less complete. Global spatial-softmax competition is not retained as the active architecture.
+- ADR-0010 evaluates the cleaner alternative of removing the attention branch entirely.

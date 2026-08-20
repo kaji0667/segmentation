@@ -432,9 +432,6 @@ class SemanticSegmentationModel(DetectionModel):
         text_embedding=None,
         class_idx=None,
         text_token_mask=None,
-        text_object_mask=None,
-        text_spatial_mask=None,
-        text_context_mask=None,
     ):
         """Perform inference, optionally conditioning the segmentation head on text."""
         if augment:
@@ -451,9 +448,6 @@ class SemanticSegmentationModel(DetectionModel):
                     text_embedding=text_embedding,
                     class_idx=class_idx,
                     text_token_mask=text_token_mask,
-                    text_object_mask=text_object_mask,
-                    text_spatial_mask=text_spatial_mask,
-                    text_context_mask=text_context_mask,
                 )
             else:
                 x = m(x)

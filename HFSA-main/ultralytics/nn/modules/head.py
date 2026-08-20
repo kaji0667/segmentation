@@ -262,8 +262,6 @@ class TextPromptSegment(nn.Module):
         self.valid_token_bias = nn.Parameter(torch.zeros(1))
         nn.init.zeros_(self.text_token_score.weight)
         self.text_proj = nn.Linear(self.text_dim, embed_dim)
-        self.query_proj = nn.Linear(self.text_dim, embed_dim)
-        self.key_proj = nn.Conv2d(embed_dim, embed_dim, 1)
         self.value_proj = nn.Conv2d(embed_dim, embed_dim, 1)
         self.film = nn.Linear(self.text_dim, embed_dim * 2)
         nn.init.zeros_(self.film.weight)
@@ -273,10 +271,8 @@ class TextPromptSegment(nn.Module):
             nn.Conv2d(embed_dim, 1, 1),
         )
         self.similarity_gate_weight = nn.Parameter(torch.tensor(0.1))
-        self.attention_gate_weight = nn.Parameter(torch.tensor(0.1))
-        self.attention_logit_scale = nn.Parameter(torch.zeros(()))
         self.mask_decoder = nn.Sequential(
-            Conv(embed_dim * 2 + 2, hidden, 3),
+            Conv(embed_dim * 2 + 1, hidden, 3),
             Conv(hidden, hidden, 3),
             nn.Conv2d(hidden, 1, 1),
         )
@@ -295,23 +291,12 @@ class TextPromptSegment(nn.Module):
         weights = torch.softmax(scores, dim=1)
         return torch.sum(text_tokens * weights.unsqueeze(-1), dim=1)
 
-    def _build_spatial_attention_map(self, key, query):
-        """Build a bounded, resolution-independent cosine-attention heatmap."""
-        cosine_logits = torch.bmm(key.flatten(2).transpose(1, 2), query).transpose(1, 2)
-        logit_scale = self.attention_logit_scale.exp().clamp(max=100.0)
-        attention_prob = torch.softmax(cosine_logits * logit_scale, dim=-1)
-        relative_density = attention_prob * attention_prob.shape[-1] - 1.0
-        return torch.tanh(relative_density).view(key.shape[0], 1, *key.shape[-2:])
-
     def forward(
         self,
         x,
         text_embedding=None,
         class_idx=None,
         text_token_mask=None,
-        text_object_mask=None,
-        text_spatial_mask=None,
-        text_context_mask=None,
     ):
         """Fuse multi-scale features with a prompt vector and output logits [B, 1, H, W]."""
         target_size = x[0].shape[-2:]
@@ -349,19 +334,15 @@ class TextPromptSegment(nn.Module):
         text_embedding = nn.functional.normalize(text_embedding, dim=1)
         similarity = (visual_norm * text_embedding).sum(1, keepdim=True)
 
-        key = nn.functional.normalize(self.key_proj(visual), dim=1)
         value = self.value_proj(visual)
-        query = nn.functional.normalize(self.query_proj(text_vector), dim=1).view(bs, self.embed_dim, 1)
-        attn_map = self._build_spatial_attention_map(key, query)
 
         gate = torch.sigmoid(
             self.spatial_gate(visual)
             + self.similarity_gate_weight * similarity
-            + self.attention_gate_weight * attn_map
         )
         gated_visual = visual * gate
         gated_value = value * gate
-        logits = self.mask_decoder(torch.cat([gated_visual, gated_value, similarity, attn_map], 1))
+        logits = self.mask_decoder(torch.cat([gated_visual, gated_value, similarity], 1))
         logits = logits + similarity + self.bias
         if self.upsample > 1:
             logits = nn.functional.interpolate(logits, scale_factor=self.upsample, mode="bilinear", align_corners=False)

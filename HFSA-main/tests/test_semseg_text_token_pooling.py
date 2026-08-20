@@ -36,15 +36,11 @@ class TextTokenPoolingTest(unittest.TestCase):
         features = [torch.randn(2, 8, 8, 8), torch.randn(2, 8, 4, 4), torch.randn(2, 8, 2, 2)]
         tokens = torch.randn(2, 5, 4)
         valid = torch.tensor([[True, True, True, False, False], [True, True, True, True, False]])
-        object_mask = torch.tensor([[False, True, False, False, False], [False, False, True, False, False]])
-        spatial_mask = torch.tensor([[False, False, False, True, False], [False, False, False, False, True]])
 
         logits = self.head(
             features,
             text_embedding=tokens,
             text_token_mask=valid,
-            text_object_mask=object_mask,
-            text_spatial_mask=spatial_mask,
         )
         logits.mean().backward()
 

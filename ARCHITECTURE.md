@@ -78,7 +78,7 @@ Validation may select a checkpoint by oIoU or official mIoU. Optional test evalu
 
 ADR-0005 evaluated fixed text-conditioned auxiliary mask losses on P3/P4 and P3-only. Neither configuration improved the official test result, and P3-only caused a clear regression. ADR-0006 therefore restores the active architecture to the no-deep-supervision learnable-gate baseline.
 
-The current `TextPromptSegment` has one output path: P3/P4/P5 fusion, FiLM, similarity and attention, the two learnable spatial-gate weights, and the final mask decoder. Only the final mask receives the BCE-Tversky training loss. The failed experiment directories remain under `runs/semseg/ds_p3p4` and `runs/semseg/ds_p3` for reproducibility.
+The current no-attention candidate has one output path: learnable token pooling, P3/P4/P5 fusion, FiLM, pixel-text similarity, one learnable similarity-gate weight, the retained value projection, and the final mask decoder. Only the final mask receives the BCE-Tversky training loss. The failed experiment directories remain under `runs/semseg/ds_p3p4` and `runs/semseg/ds_p3` for reproducibility.
 
 ## Checkpoint Selection and Retention
 
@@ -92,8 +92,16 @@ This candidate adds 769 parameters and does not modify OpenCLIP, backbone, neck,
 
 The full seed-42 run improved the same-protocol mIoU-selection baseline on test from `oIoU=0.672197`, `mIoU=0.509192`, and class-macro mIoU `0.536258` to `oIoU=0.683420`, `mIoU=0.519818`, and class-macro mIoU `0.545010`. Token pooling is therefore retained as the active text aggregation path.
 
-## Calibrated Spatial Attention Heatmap Candidate
+## Rejected Calibrated Spatial Attention Heatmap
 
 ADR-0009 corrects the query/key attention map inside `TextPromptSegment`. The old implementation normalized key and query, divided their cosine logits by `sqrt(128)`, and then applied a 4,096-position softmax, producing an almost uniform map with `1/HW` magnitude.
 
-The active candidate uses one learnable positive temperature, converts the softmax result to relative density `probability * HW - 1`, and bounds it with `tanh`. Uniform attention now maps to zero; spatially preferred pixels are positive and suppressed pixels are negative. The change adds one parameter and leaves the rest of the head, loss, image backbone/neck, OpenCLIP, and evaluation unchanged.
+The controlled seed-42 run converted the probability to bounded relative density but regressed against token pooling on test: `oIoU` fell from `0.683420` to `0.678791`, official mIoU from `0.519818` to `0.514869`, and class-macro mIoU from `0.545010` to `0.538315`. Precision increased while recall and high-IoU success rates decreased. The global spatial softmax is therefore rejected for dense mask grounding because pixels compete for fixed probability mass and the map is relative spatial rank rather than independent foreground evidence.
+
+## No-Attention Token-Pooling Ablation
+
+ADR-0010 removes the query/key spatial-softmax branch while retaining learnable token pooling, multi-scale fusion, FiLM, independent pixel-text similarity, the visual spatial gate, the value projection, and the decoder. The decoder input changes from `2 * embed_dim + 2` channels to `2 * embed_dim + 1` because only gated visual, gated value, and similarity remain.
+
+The same cleanup removes the unused `text_object_mask`, `text_spatial_mask`, and `text_context_mask` interfaces and stops generating their heuristic cache fields. Existing embedding caches remain compatible because extra legacy fields are ignored. `text_token_mask` remains active and is used by learnable token pooling.
+
+The candidate passed syntax checks, 11 directed tests, and a 2-train/2-val/2-test CUDA smoke under `runs/semseg/noattn_smoke2`. A full seed-42 run against `runs/semseg/tpool` is required before promotion.

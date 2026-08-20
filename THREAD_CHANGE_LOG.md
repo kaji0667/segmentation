@@ -102,3 +102,10 @@
 - 均匀注意力现在严格对应 0；偏好位置为正、抑制位置为负，热图尺度不再随特征分辨率衰减。
 - 仅增加 1 个参数；定向测试 4 项、原 token pooling 回归测试 3 项和 2-train/2-val/2-test GPU smoke 全部通过。
 - 完整实验目录计划为 `runs/semseg/attnmap`，尚未完成全量训练，不能称为指标提升。
+
+### 16. 注意力热图失败与 no-attention 消融
+- `attnmap` 全量 test 为 `oIoU=0.678791`、`mIoU=0.514869`、类别宏平均 `0.538315`，低于 `tpool` 的 `0.683420/0.519818/0.545010`。
+- 新热图提高 Precision、降低预测正像素率，但 Recall 和 Pr@0.9 明显下降，说明空间 softmax 的像素竞争使掩膜更保守、不完整。
+- 活动候选完整移除 query/key attention、attention gate 权重、temperature 和 decoder attention 通道，保留 token pooling、similarity、visual gate 和 value 分支。
+- 同时移除没有被活动 head 消费的 object/spatial/context token mask 生成、加载和转发；旧缓存中的额外字段会被忽略，无需重建缓存。
+- 11 项测试与 2-train/2-val/2-test GPU smoke 已通过；全量目录为 `runs/semseg/noattn`，结果待运行。

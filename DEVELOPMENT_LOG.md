@@ -579,3 +579,29 @@ Planned controlled full command:
 GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
 SAVE_DIR=runs/semseg/attnmap bash run_semseg_preset.sh baseline
 ```
+
+### Attention Heatmap Full Result and No-Attention Ablation
+
+Completed attention-map result:
+- Run: `runs/semseg/attnmap`, 37 epochs with raw-best epoch 29 and frozen threshold `0.70`.
+- Test: `oIoU=0.678791`, `mIoU=0.514869`, class-macro mIoU `0.538315`, precision `0.796597`, recall `0.821107`, F1 `0.808666`, and `Pr@0.9=0.128699`.
+- Relative to `tpool`, precision improved by `0.008254`, but oIoU regressed by `0.004630`, mIoU by `0.004949`, recall by `0.015892`, and `Pr@0.9` by `0.008905`.
+- Decision: reject global spatial-softmax attention as the active mask-grounding branch.
+
+No-attention changes:
+- Removed query/key spatial attention, its two scalar parameters, and the attention decoder channel.
+- Retained token pooling, FiLM, similarity, visual spatial gate, value projection, decoder, backbone/neck, loss, and evaluation.
+- Removed unused object/spatial/context token-mask generation, loading, forwarding, and head arguments.
+- Legacy caches remain compatible; only token embeddings and `text_token_mask` are exposed to the active model.
+
+Verification:
+- Python compilation passed.
+- `python -m unittest discover -s tests -p "test_semseg_*.py" -v`: 11 tests passed.
+- CUDA smoke with 2 train, 2 validation, and 2 test batches passed under `runs/semseg/noattn_smoke2`.
+- Smoke trainable parameter count: `2,631,752`.
+
+Planned full command:
+```bash
+GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
+SAVE_DIR=runs/semseg/noattn bash run_semseg_preset.sh baseline
+```
