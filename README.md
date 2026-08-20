@@ -48,6 +48,14 @@ To evaluate the best validation checkpoint on the official test split with the v
 TEST_AFTER_TRAIN=1 bash run_semseg_preset.sh baseline
 ```
 
+Directional flip augmentation defaults to axis-aware control: horizontal words only block horizontal flips, while vertical words (including `above` and `below`) only block vertical flips. Reproduce the former all-axis blocking policy with:
+
+```bash
+AUGMENT_DIRECTION_POLICY=legacy bash run_semseg_preset.sh baseline
+```
+
+The RRSIS-D loader also preserves and explicitly reconciles the 14 official samples whose JPEG height differs from the stored RLE mask height by resizing the decoded mask to the actual image size with nearest-neighbor interpolation.
+
 The main RRSIS-D report fields are:
 
 - `oiou`: cumulative foreground intersection over union, matching paper oIoU/cIoU.

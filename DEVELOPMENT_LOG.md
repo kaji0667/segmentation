@@ -605,3 +605,43 @@ Planned full command:
 GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
 SAVE_DIR=runs/semseg/noattn bash run_semseg_preset.sh baseline
 ```
+
+## 2026-08-21
+
+### RRSIS-D Mask-Size Reconciliation and Axis-Aware Flip Ablation
+
+Context:
+- The first `runs/semseg/noattn` process stopped after epoch 11 and did not produce `test_results.json`; it is an incomplete run and is not accepted as an ablation result.
+- Auditing `instances.json`, JPEG headers, annotations, and refs found 17 non-`800 x 800` source images. Three have matching RLE sizes; the remaining 14 have actual JPEG heights from 784 to 813 but `800 x 800` RLE masks.
+- The 14 mismatches are distributed as `train=9`, `val=2`, and `test=3`. Width is 800 for every affected image, and the official image metadata matches the decoded JPEG dimensions.
+
+Changes:
+- Added explicit nearest-neighbor mask-to-image alignment before the common training resize, preserving all official samples and binary mask values.
+- Split direction detection into horizontal and vertical axes.
+- Added `above` and `below` as vertical direction words.
+- Added `--augment-direction-policy legacy|axis-aware`; `axis-aware` is the new default, while `legacy` reproduces the former rule that any directional word blocks both flips.
+- Added `AUGMENT_DIRECTION_POLICY` support to `run_semseg_preset.sh`.
+- Added directed tests for axis classification, horizontal-only blocking, vertical-only blocking, legacy behavior, and mismatched mask alignment.
+
+Verification completed before full runs:
+- `python -m py_compile dataset/rrsisd_refseg_dataset.py train_semseg.py tests/test_rrsisd_axis_aware_augmentation.py`: passed.
+- `python tests/test_rrsisd_axis_aware_augmentation.py -v`: 5 tests passed.
+- `python -m unittest discover -s tests -p 'test_*.py' -v`: 16 tests passed in the WSL/PyTorch environment.
+- Loaded all 14 mismatched official samples without final resizing and verified each repaired image/mask shape pair exactly matches.
+- Axis-aware CUDA smoke completed 2 train, 2 validation, and 2 test batches under `runs/semseg/axis_aug_smoke`; strict checkpoint loading and `test_results.json` generation passed.
+- `bash -n run_semseg_preset.sh`: passed.
+
+Controlled experiment plan:
+```bash
+GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
+AUGMENT_DIRECTION_POLICY=legacy SAVE_DIR=runs/semseg/noattn_aug_legacy \
+bash run_semseg_preset.sh baseline
+
+GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
+AUGMENT_DIRECTION_POLICY=axis-aware SAVE_DIR=runs/semseg/noattn_aug_axis \
+bash run_semseg_preset.sh baseline
+```
+
+Control constraints:
+- Same no-attention architecture, seed 42, split, image size, batch size, optimizer, scheduler, loss, sampler, validation thresholds, checkpoint selection, and frozen-threshold test protocol.
+- The only experiment variable is `augment_direction_policy`.

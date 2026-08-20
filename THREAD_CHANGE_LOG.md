@@ -109,3 +109,10 @@
 - 活动候选完整移除 query/key attention、attention gate 权重、temperature 和 decoder attention 通道，保留 token pooling、similarity、visual gate 和 value 分支。
 - 同时移除没有被活动 head 消费的 object/spatial/context token mask 生成、加载和转发；旧缓存中的额外字段会被忽略，无需重建缓存。
 - 11 项测试与 2-train/2-val/2-test GPU smoke 已通过；全量目录为 `runs/semseg/noattn`，结果待运行。
+
+### 17. 14 个尺寸异常样本与轴感知翻转消融
+- 首次 `noattn` 进程只运行到第 11 轮且没有生成 test 报告，不能作为完整实验结果。
+- 全库核对发现 17 张非 800×800 原图，其中 3 张 RLE 尺寸与原图一致；其余 14 张为 JPEG 实际高度 784–813、RLE 仍为 800×800，分布为 train 9、val 2、test 3。
+- 数据加载器现在先用最近邻把解码 mask 对齐到 JPEG 实际尺寸，再执行统一训练缩放；不删除官方样本，不改变二值 mask 语义。
+- 翻转策略拆为水平轴与垂直轴分别控制：水平词只禁水平翻转，垂直词只禁垂直翻转，新增 `above/below` 垂直词；`legacy` 策略保留用于严格消融。
+- 正式消融固定 no-attention 模型、seed 42、split、loss、sampler、阈值与 checkpoint/test 协议，只比较 `legacy` 和 `axis-aware` 两种增强策略。

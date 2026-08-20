@@ -10,10 +10,20 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 _DIRECTIONAL_TEXT_RE = re.compile(
     r"\b("
-    r"left|right|top|bottom|upper|lower|middle|center|centre|"
+    r"left|right|top|bottom|upper|lower|above|below|middle|center|centre|"
     r"north|south|east|west|northeast|northwest|southeast|southwest|"
     r"leftmost|rightmost|topmost|bottommost"
     r")\b",
+    re.IGNORECASE,
+)
+
+_HORIZONTAL_DIRECTION_RE = re.compile(
+    r"\b(left|right|east|west|northeast|northwest|southeast|southwest|leftmost|rightmost)\b",
+    re.IGNORECASE,
+)
+
+_VERTICAL_DIRECTION_RE = re.compile(
+    r"\b(top|bottom|upper|lower|above|below|north|south|northeast|northwest|southeast|southwest|topmost|bottommost)\b",
     re.IGNORECASE,
 )
 
@@ -66,6 +76,12 @@ def _load_jsonl_rows(path: str | Path) -> List[Dict[str, Any]]:
 
 def _has_directional_text(text: str) -> bool:
     return bool(_DIRECTIONAL_TEXT_RE.search(str(text)))
+
+
+def _directional_axes(text: str) -> Tuple[bool, bool]:
+    """Return whether text constrains the horizontal and vertical axes."""
+    value = str(text)
+    return bool(_HORIZONTAL_DIRECTION_RE.search(value)), bool(_VERTICAL_DIRECTION_RE.search(value))
 
 
 def _load_refs(path: Path) -> List[Dict[str, Any]]:
@@ -338,6 +354,7 @@ class RRSISDRefSegDataset:
         hflip_prob: float = 0.5,
         vflip_prob: float = 0.5,
         color_jitter: float = 0.15,
+        directional_flip_policy: str = "axis-aware",
     ) -> None:
         self.rows = _load_jsonl_rows(rows) if isinstance(rows, (str, Path)) else list(rows)
         self.image_size = int(image_size) if image_size else None
@@ -348,6 +365,12 @@ class RRSISDRefSegDataset:
         self.hflip_prob = float(hflip_prob)
         self.vflip_prob = float(vflip_prob)
         self.color_jitter = max(float(color_jitter), 0.0)
+        self.directional_flip_policy = str(directional_flip_policy).strip().lower()
+        if self.directional_flip_policy not in {"legacy", "axis-aware"}:
+            raise ValueError(
+                "directional_flip_policy must be 'legacy' or 'axis-aware', "
+                f"got {directional_flip_policy!r}"
+            )
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -387,18 +410,41 @@ class RRSISDRefSegDataset:
             mask_resized = Image.fromarray(mask).resize(size, Image.NEAREST)
             return np.asarray(image_resized), np.asarray(mask_resized)
 
+    @staticmethod
+    def _align_mask_to_image(image, mask):
+        """Resize an annotation mask to the decoded image coordinate size when metadata differs."""
+        image_height, image_width = int(image.shape[0]), int(image.shape[1])
+        if tuple(mask.shape[:2]) == (image_height, image_width):
+            return mask
+        try:
+            import cv2
+
+            return cv2.resize(mask, (image_width, image_height), interpolation=cv2.INTER_NEAREST)
+        except ImportError:
+            import numpy as np
+            from PIL import Image
+
+            resized = Image.fromarray(mask).resize((image_width, image_height), Image.NEAREST)
+            return np.asarray(resized)
+
     def _augment(self, image, mask, text: str = ""):
         import numpy as np
 
-        # Flips can invalidate referring expressions such as "left" or "upper".
-        allow_geometric_flip = not _has_directional_text(text)
-        if allow_geometric_flip:
-            if self.hflip_prob > 0 and np.random.random() < self.hflip_prob:
-                image = np.flip(image, axis=1)
-                mask = np.flip(mask, axis=1)
-            if self.vflip_prob > 0 and np.random.random() < self.vflip_prob:
-                image = np.flip(image, axis=0)
-                mask = np.flip(mask, axis=0)
+        if self.directional_flip_policy == "legacy":
+            has_direction = _has_directional_text(text)
+            allow_hflip = not has_direction
+            allow_vflip = not has_direction
+        else:
+            has_horizontal_direction, has_vertical_direction = _directional_axes(text)
+            allow_hflip = not has_horizontal_direction
+            allow_vflip = not has_vertical_direction
+
+        if allow_hflip and self.hflip_prob > 0 and np.random.random() < self.hflip_prob:
+            image = np.flip(image, axis=1)
+            mask = np.flip(mask, axis=1)
+        if allow_vflip and self.vflip_prob > 0 and np.random.random() < self.vflip_prob:
+            image = np.flip(image, axis=0)
+            mask = np.flip(mask, axis=0)
 
         if self.color_jitter > 0:
             image_f = image.astype(np.float32)
@@ -417,6 +463,7 @@ class RRSISDRefSegDataset:
         image_path = _resolve_existing_path(row["image"])
         image = self._read_image(str(image_path))
         mask = decode_segmentation_mask(row["segmentation"])
+        mask = self._align_mask_to_image(image, mask)
 
         if self.image_size:
             image, mask = self._resize(image, mask, self.image_size)

@@ -36,6 +36,7 @@ common_args=(
   --augment-hflip 0.5
   --augment-vflip 0.5
   --augment-color-jitter 0.15
+  --augment-direction-policy "${AUGMENT_DIRECTION_POLICY:-axis-aware}"
   --seed "${SEED:-42}"
 )
 

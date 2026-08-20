@@ -45,10 +45,12 @@ Restricted:
 - Small-target sampling uses true foreground mask area from RLE metadata when available, with bbox area only as a fallback.
 - Binary segmentation loss is computed per sample before averaging, with optional area-aware loss weighting for very small masks.
 - Train-time augmentation is lightweight and only enabled for the training split:
-  - horizontal flip only when the text has no directional/positional words
-  - vertical flip only when the text has no directional/positional words
+  - `axis-aware` is the active policy: horizontal words block only horizontal flip, while vertical words block only vertical flip
+  - `above` and `below` are vertical-axis constraints; diagonal compass words constrain both axes
+  - `legacy` remains selectable for controlled ablation and blocks both flips whenever any directional/positional word is present
   - brightness/contrast jitter
-- Rotation is intentionally not included because RRSIS-D text may include directional expressions such as left, right, top, or bottom. For the same reason, geometric flip is automatically skipped for samples whose text contains directional/positional words.
+- Rotation is intentionally not included because RRSIS-D text may include directional expressions such as left, right, top, bottom, above, or below.
+- Fourteen official samples have JPEG heights that differ from their `800 x 800` RLE mask size (`train=9`, `val=2`, `test=3`). The dataset adapter preserves every sample and nearest-neighbor resizes the decoded binary mask to the actual JPEG coordinate size before the common training resize.
 
 ## Known Risks
 

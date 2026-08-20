@@ -53,6 +53,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--augment-hflip", type=float, default=0.5, help="Train-time horizontal flip probability for samples without directional text.")
     parser.add_argument("--augment-vflip", type=float, default=0.5, help="Train-time vertical flip probability for samples without directional text.")
     parser.add_argument("--augment-color-jitter", type=float, default=0.15, help="Train-time brightness/contrast jitter strength.")
+    parser.add_argument(
+        "--augment-direction-policy",
+        type=str,
+        default="axis-aware",
+        choices=("legacy", "axis-aware"),
+        help="legacy blocks both flips for any position word; axis-aware blocks only the constrained axis.",
+    )
     parser.add_argument("--val-thresholds", type=str, default="0.5", help="Comma-separated sigmoid thresholds to scan during binary validation.")
     parser.add_argument(
         "--val-select-metric",
@@ -426,6 +433,7 @@ def build_semseg_dataset(
             hflip_prob=args.augment_hflip,
             vflip_prob=args.augment_vflip,
             color_jitter=args.augment_color_jitter,
+            directional_flip_policy=args.augment_direction_policy,
         )
     raise ValueError(f"Unsupported semantic dataset_type: {dtype}")
 
@@ -1183,7 +1191,8 @@ def main() -> None:
     print(
         "train augmentation: "
         f"enabled={args.augment}, hflip={args.augment_hflip}, "
-        f"vflip={args.augment_vflip}, color_jitter={args.augment_color_jitter}"
+        f"vflip={args.augment_vflip}, color_jitter={args.augment_color_jitter}, "
+        f"direction_policy={args.augment_direction_policy}"
     )
     print(f"validation thresholds: {val_thresholds}")
     print(
