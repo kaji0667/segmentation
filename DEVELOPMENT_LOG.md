@@ -527,3 +527,55 @@ Full command:
 GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
 SAVE_DIR=runs/semseg/tpool bash run_semseg_preset.sh baseline
 ```
+
+
+### Learnable Text Token Pooling Full Result
+
+Execution:
+- The seed-42 full run completed after 47 epochs and evaluated all 3,481 test samples with `best_raw.pt` from epoch 39 and the frozen validation threshold `0.70`.
+
+Test result:
+- `oIoU=0.683420`
+- `mIoU=0.519818`
+- `class_macro_mIoU=0.545010`
+- `precision=0.788342`, `recall=0.836999`, `F1=0.811943`
+- `Pr@0.5/0.7/0.8/0.9=0.573973/0.383510/0.275783/0.137604`
+- `pred_pos_rate=0.049531`, target positive rate `0.046652`
+
+Same-protocol comparison with `base_miou`:
+- oIoU improved by `+0.011223`.
+- official mIoU improved by `+0.010626`.
+- class-macro mIoU improved by `+0.008753`.
+- Precision, Recall, F1, and Pr@0.5-0.9 all improved; predicted-positive rate decreased slightly.
+
+Decision:
+- Retain learnable token pooling as the active text aggregation path.
+- It does not fully solve foreground overflow relative to the older oIoU-selected checkpoint, so the next experiment targets the spatial attention heatmap rather than adding another text-role heuristic.
+
+### Calibrated Spatial Attention Heatmap Candidate
+
+Diagnosis:
+- `key` and `query` were both L2-normalized, but their cosine logits were divided again by `sqrt(128)`.
+- The logits were therefore bounded near `[-0.088, 0.088]`; a 4,096-position softmax could vary by at most about `1.19x` between its theoretical maximum and minimum.
+- The resulting attention channel was nearly uniform and had mean magnitude `1/4096`, making it poorly scaled for a dense segmentation gate and decoder input.
+
+Changes:
+- Added one learnable `attention_logit_scale`, initialized so the positive temperature is `1.0`.
+- Removed the additional `1/sqrt(embed_dim)` compression.
+- Converted the spatial softmax to relative density `probability * num_positions - 1`.
+- Bounded the heatmap with `tanh`, so uniform attention is exactly zero and the output stays in `[-1, 1]`.
+- Kept token pooling, P3/P4/P5 fusion, FiLM, similarity path, decoder, loss, backbone, neck, OpenCLIP, and evaluation unchanged.
+
+Verification:
+- `python -m py_compile ultralytics/nn/modules/head.py tests/test_semseg_spatial_attention.py tests/test_semseg_text_token_pooling.py`: passed.
+- `python tests/test_semseg_spatial_attention.py -v`: 4 tests passed.
+- `python tests/test_semseg_text_token_pooling.py -v`: 3 tests passed.
+- GPU smoke with 2 train, 2 validation, and 2 test batches: passed under `runs/semseg/attnmap_smoke`.
+- Smoke saved `last.pt`, `best.pt`, `best_raw.pt`, and `test_results.json`; strict checkpoint loading during test evaluation passed.
+- Trainable parameter count increased from `2,747,849` to `2,747,850`.
+
+Planned controlled full command:
+```bash
+GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
+SAVE_DIR=runs/semseg/attnmap bash run_semseg_preset.sh baseline
+```

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as a controlled experiment. Metric improvement remains unconfirmed until the full seed-42 run finishes.
+Accepted. The full seed-42 run improved the same-protocol mIoU-selection baseline and token pooling is retained as the active text aggregation path.
 
 ## Context
 
@@ -50,3 +50,10 @@ text_vector = sum(text_tokens * weights)
 - `ADR/0002-learnable-spatial-gate-weights.md`
 - `ADR/0006-restore-no-deep-supervision-baseline.md`
 - `ADR/0007-select-and-save-raw-best-miou-checkpoint.md`
+
+## Outcome
+
+- Test `oIoU=0.683420`, `mIoU=0.519818`, and class-macro mIoU `0.545010`.
+- Compared with `base_miou`, oIoU improved by `0.011223`, official mIoU by `0.010626`, and class-macro mIoU by `0.008753`.
+- Precision, Recall, F1, and all reported Pr@ thresholds also improved under the same selection protocol.
+- The next experiment keeps token pooling and calibrates the spatial attention heatmap under ADR-0009.

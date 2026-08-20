@@ -90,3 +90,15 @@
 - 新增零初始化 `Linear(768,1)` token scorer 和 `valid_token_bias`，初始化时复现旧 mean pooling，仅增加 769 参数。
 - 不使用存在 BPE 对齐和同类参照物歧义的启发式角色掩码。
 - 单元测试、代理 A 复审和 GPU smoke 已通过；完整实验目录为 `runs/semseg/tpool`。
+
+### 14. 可学习 token 池化完整结果
+- `tpool` test 达到 `oIoU=0.683420`、`mIoU=0.519818`、`class_macro_mIoU=0.545010`。
+- 相比相同 mIoU 选模协议的 `base_miou`，oIoU、mIoU、类别宏平均、Precision、Recall、F1 和 Pr@0.5-0.9 均提升，预测正像素比例略降。
+- token pooling 被保留为活动文本聚合路径，但相对旧 oIoU 选模 checkpoint 仍有 Precision/高 IoU 成功率权衡。
+
+### 15. 空间注意力热图标定候选
+- 发现旧 attention 在 key/query 已归一化后又除以 `sqrt(128)`，并在 4096 个位置做 softmax，热图接近均匀且量级只有 `1/HW`。
+- 新增一个可学习温度，使用 `softmax(temperature * cosine) * HW - 1` 构造相对密度，再经 `tanh` 限制到 `[-1,1]`。
+- 均匀注意力现在严格对应 0；偏好位置为正、抑制位置为负，热图尺度不再随特征分辨率衰减。
+- 仅增加 1 个参数；定向测试 4 项、原 token pooling 回归测试 3 项和 2-train/2-val/2-test GPU smoke 全部通过。
+- 完整实验目录计划为 `runs/semseg/attnmap`，尚未完成全量训练，不能称为指标提升。

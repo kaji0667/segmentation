@@ -89,3 +89,11 @@ The standard semantic-segmentation baseline selects both the validation threshol
 ADR-0008 adds a lightweight token-pooling adapter inside `TextPromptSegment`. Cached OpenCLIP token features are scored by a zero-initialized `Linear(768, 1)` and one learnable valid-token bias, then reduced with softmax-weighted pooling. Zero initialization reproduces the former fixed `tokens.mean(1)` behavior, so training determines whether particular contextual tokens and valid positions should receive more weight.
 
 This candidate adds 769 parameters and does not modify OpenCLIP, backbone, neck, P3/P4/P5 fusion, spatial-gate weights, decoder, loss, or evaluation. The heuristic object/spatial token masks are intentionally not used because they are not guaranteed to align with OpenCLIP BPE spans and may mark same-class reference objects.
+
+The full seed-42 run improved the same-protocol mIoU-selection baseline on test from `oIoU=0.672197`, `mIoU=0.509192`, and class-macro mIoU `0.536258` to `oIoU=0.683420`, `mIoU=0.519818`, and class-macro mIoU `0.545010`. Token pooling is therefore retained as the active text aggregation path.
+
+## Calibrated Spatial Attention Heatmap Candidate
+
+ADR-0009 corrects the query/key attention map inside `TextPromptSegment`. The old implementation normalized key and query, divided their cosine logits by `sqrt(128)`, and then applied a 4,096-position softmax, producing an almost uniform map with `1/HW` magnitude.
+
+The active candidate uses one learnable positive temperature, converts the softmax result to relative density `probability * HW - 1`, and bounds it with `tanh`. Uniform attention now maps to zero; spatially preferred pixels are positive and suppressed pixels are negative. The change adds one parameter and leaves the rest of the head, loss, image backbone/neck, OpenCLIP, and evaluation unchanged.
