@@ -439,10 +439,13 @@ class RRSISDRefSegDataset:
             allow_hflip = not has_horizontal_direction
             allow_vflip = not has_vertical_direction
 
-        if allow_hflip and self.hflip_prob > 0 and np.random.random() < self.hflip_prob:
+        # Always consume one draw per axis so policy ablations keep all later RNG draws aligned.
+        hflip_draw = np.random.random()
+        vflip_draw = np.random.random()
+        if allow_hflip and self.hflip_prob > 0 and hflip_draw < self.hflip_prob:
             image = np.flip(image, axis=1)
             mask = np.flip(mask, axis=1)
-        if allow_vflip and self.vflip_prob > 0 and np.random.random() < self.vflip_prob:
+        if allow_vflip and self.vflip_prob > 0 and vflip_draw < self.vflip_prob:
             image = np.flip(image, axis=0)
             mask = np.flip(mask, axis=0)
 

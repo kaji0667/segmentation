@@ -620,6 +620,7 @@ Changes:
 - Split direction detection into horizontal and vertical axes.
 - Added `above` and `below` as vertical direction words.
 - Added `--augment-direction-policy legacy|axis-aware`; `axis-aware` is the new default, while `legacy` reproduces the former rule that any directional word blocks both flips.
+- Both policies consume the same two per-sample flip draws before policy gating, keeping later color-jitter randomness aligned in the strict ablation.
 - Added `AUGMENT_DIRECTION_POLICY` support to `run_semseg_preset.sh`.
 - Added directed tests for axis classification, horizontal-only blocking, vertical-only blocking, legacy behavior, and mismatched mask alignment.
 

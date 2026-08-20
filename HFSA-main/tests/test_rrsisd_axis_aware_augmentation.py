@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -43,9 +44,11 @@ class AxisAwareAugmentationTest(unittest.TestCase):
         np.testing.assert_array_equal(mask, np.flip(self.mask, axis=1))
 
     def test_legacy_policy_still_blocks_both_axes(self):
-        image, mask = self._dataset("legacy")._augment(self.image, self.mask, "the ship on the left")
+        with patch("numpy.random.random", side_effect=[0.1, 0.2]) as random_mock:
+            image, mask = self._dataset("legacy")._augment(self.image, self.mask, "the ship on the left")
         np.testing.assert_array_equal(image, self.image)
         np.testing.assert_array_equal(mask, self.mask)
+        self.assertEqual(random_mock.call_count, 2)
 
     def test_mask_size_is_aligned_to_image_size(self):
         image = np.zeros((3, 4, 3), dtype=np.uint8)

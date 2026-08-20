@@ -16,6 +16,7 @@ A full metadata audit also found 14 official samples whose decoded JPEG height d
 - Under the default `axis-aware` policy, block only the flip on the constrained axis.
 - Treat `above` and `below` as vertical constraints and diagonal compass words as constraints on both axes.
 - Retain a selectable `legacy` policy for strict comparison with the former behavior.
+- Consume one horizontal and one vertical random draw for every sample under both policies, then gate application by the policy. This keeps later color-jitter draws aligned between controlled runs.
 - Preserve all 14 size-mismatched samples and nearest-neighbor resize the decoded binary mask to the actual JPEG size before the common model-input resize.
 - Compare the two augmentation policies with identical no-attention architecture, seed, data split, loss, sampler, optimizer, scheduler, checkpoint selection, and frozen-threshold test evaluation.
 
