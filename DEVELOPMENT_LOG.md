@@ -646,3 +646,12 @@ bash run_semseg_preset.sh baseline
 Control constraints:
 - Same no-attention architecture, seed 42, split, image size, batch size, optimizer, scheduler, loss, sampler, validation thresholds, checkpoint selection, and frozen-threshold test protocol.
 - The only experiment variable is `augment_direction_policy`.
+
+Controlled experiment outcome:
+- The sequential script recorded publish commit `4ed9ed26e842f264516f003c889dd8763000b879` and identical source hashes before launching both runs.
+- `legacy` completed 50 epochs with raw-best epoch 42 and validation-selected threshold `0.80`. Test: `oIoU=0.691092`, `mIoU=0.521327`, class-macro mIoU `0.543093`, Precision `0.814823`, Recall `0.819856`, F1 `0.817332`, Pr@0.8 `0.288997`, Pr@0.9 `0.151681`, and predicted-positive rate `0.046940`.
+- `axis-aware` completed 54 epochs with raw-best epoch 53 and validation-selected threshold `0.70`. Test: `oIoU=0.698654`, `mIoU=0.530917`, class-macro mIoU `0.553549`, Precision `0.794239`, Recall `0.853056`, F1 `0.822597`, Pr@0.8 `0.295030`, Pr@0.9 `0.142488`, and predicted-positive rate `0.050106`.
+- Axis-aware improved oIoU by `0.007562`, official mIoU by `0.009590`, class-macro mIoU by `0.010456`, Recall by `0.033200`, F1 by `0.005265`, and Pr@0.8 by `0.006033`. Precision declined by `0.020585` and Pr@0.9 by `0.009193`.
+- Class mIoU improved for 14 of 20 classes. Largest gains: Expressway-Service-area `+0.048046`, harbor `+0.044988`, tenniscourt `+0.041026`, ship `+0.023354`, and vehicle `+0.016611`. Largest regression: stadium `-0.025539`.
+- Decision: retain the no-attention head and `axis-aware` augmentation default. Keep `legacy` available for reproduction and record the Precision/Pr@0.9 tradeoff as a follow-up risk.
+- Verified final artifacts: `best_raw.pt`, `test_results.json`, and `test_confusion_matrix.png` exist for both runs; the sequential training process exited normally.

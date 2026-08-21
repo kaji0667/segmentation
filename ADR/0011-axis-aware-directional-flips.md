@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for controlled evaluation. Full legacy-versus-axis-aware metric outcome is pending.
+Accepted and retained as the default augmentation policy.
 
 ## Context
 
@@ -33,6 +33,17 @@ A full metadata audit also found 14 official samples whose decoded JPEG height d
 - The active augmentation default changes from global directional blocking to axis-aware blocking.
 - Existing commands can reproduce the former behavior with `--augment-direction-policy legacy` or `AUGMENT_DIRECTION_POLICY=legacy`.
 - Full controlled runs are required before claiming a metric improvement.
+
+## Outcome
+
+The strict sequential ablation completed with identical source hashes and every setting except `augment_direction_policy` fixed.
+
+- `legacy`: 50 epochs, raw-best epoch 42, threshold `0.80`; test `oIoU=0.691092`, `mIoU=0.521327`, class-macro mIoU `0.543093`, Precision `0.814823`, Recall `0.819856`, F1 `0.817332`, Pr@0.8 `0.288997`, and Pr@0.9 `0.151681`.
+- `axis-aware`: 54 epochs, raw-best epoch 53, threshold `0.70`; test `oIoU=0.698654`, `mIoU=0.530917`, class-macro mIoU `0.553549`, Precision `0.794239`, Recall `0.853056`, F1 `0.822597`, Pr@0.8 `0.295030`, and Pr@0.9 `0.142488`.
+- Axis-aware deltas were `+0.007562` oIoU, `+0.009590` mIoU, `+0.010456` class-macro mIoU, `+0.033200` Recall, and `+0.005265` F1. Precision changed by `-0.020585` and Pr@0.9 by `-0.009193`.
+- Fourteen of twenty semantic classes improved in class mIoU. The largest gains were Expressway-Service-area, harbor, tenniscourt, ship, and vehicle; the largest regression was stadium.
+
+The official mIoU improvement, broader class gains, and stronger recall justify retaining `axis-aware` as the default. `legacy` remains selectable for reproduction.
 
 ## Related
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as a controlled experiment. Full metric outcome is pending.
+Accepted and retained in the active mainline.
 
 ## Context
 
@@ -39,6 +39,13 @@ The project also retained `text_object_mask`, `text_spatial_mask`, and `text_con
 - Python compilation passed for the head, model routing, training entry, dataset loader, and tests.
 - Eleven directed tests passed, covering checkpoint selection, token pooling, no-attention structure/gradients, legacy-cache compatibility, and active text-input routing.
 - A 2-train/2-val/2-test CUDA smoke completed under `runs/semseg/noattn_smoke2` and strict checkpoint loading passed.
+
+## Outcome
+
+- The strict legacy-policy no-attention run completed at `runs/semseg/noattn_aug_legacy` with raw-best epoch 42 and frozen threshold `0.80`.
+- Test results were `oIoU=0.691092`, official `mIoU=0.521327`, and class-macro mIoU `0.543093`.
+- Relative to `runs/semseg/tpool`, oIoU improved by `0.007672`, official mIoU by `0.001509`, F1 by `0.005390`, Pr@0.8 by `0.013215`, and Pr@0.9 by `0.014076`; class-macro mIoU declined by `0.001917` and recall by `0.017143`.
+- The primary aggregate IoU metrics improved without the spatial-softmax branch, so the branch remains removed. The later axis-aware augmentation result is documented separately in ADR-0011.
 
 ## Related
 

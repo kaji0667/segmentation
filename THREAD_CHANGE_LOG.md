@@ -116,3 +116,10 @@
 - 数据加载器现在先用最近邻把解码 mask 对齐到 JPEG 实际尺寸，再执行统一训练缩放；不删除官方样本，不改变二值 mask 语义。
 - 翻转策略拆为水平轴与垂直轴分别控制：水平词只禁水平翻转，垂直词只禁垂直翻转，新增 `above/below` 垂直词；`legacy` 策略保留用于严格消融。
 - 正式消融固定 no-attention 模型、seed 42、split、loss、sampler、阈值与 checkpoint/test 协议，只比较 `legacy` 和 `axis-aware` 两种增强策略。
+
+### 18. 轴感知翻转消融完成
+- `legacy` 在第 50 轮早停，raw-best 为第 42 轮、阈值 `0.80`；test 为 `oIoU=0.691092`、`mIoU=0.521327`、类别宏平均 `0.543093`。
+- `axis-aware` 在第 54 轮早停，raw-best 为第 53 轮、阈值 `0.70`；test 为 `oIoU=0.698654`、`mIoU=0.530917`、类别宏平均 `0.553549`。
+- 轴感知策略提升了 oIoU、官方 mIoU、类别宏平均、Recall、F1 和 Pr@0.5-0.8，但 Precision 与 Pr@0.9 有所下降。
+- 20 个语义类别中有 14 个 class-mIoU 提升，最大收益来自 Expressway-Service-area、harbor、tenniscourt、ship 和 vehicle；stadium 回退最大。
+- 结论：保留 no-attention head 与 `axis-aware` 默认增强；`legacy` 继续作为可复现实验选项。

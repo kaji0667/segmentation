@@ -106,4 +106,6 @@ ADR-0010 removes the query/key spatial-softmax branch while retaining learnable 
 
 The same cleanup removes the unused `text_object_mask`, `text_spatial_mask`, and `text_context_mask` interfaces and stops generating their heuristic cache fields. Existing embedding caches remain compatible because extra legacy fields are ignored. `text_token_mask` remains active and is used by learnable token pooling.
 
-The candidate passed syntax checks, 11 directed tests, and a 2-train/2-val/2-test CUDA smoke under `runs/semseg/noattn_smoke2`. A full seed-42 run against `runs/semseg/tpool` is required before promotion.
+The candidate passed syntax checks, 11 directed tests, and a 2-train/2-val/2-test CUDA smoke under `runs/semseg/noattn_smoke2`. Under the legacy augmentation policy, the completed seed-42 run improved test oIoU from `0.683420` to `0.691092` and official mIoU from `0.519818` to `0.521327`, while class-macro mIoU changed from `0.545010` to `0.543093`. This supports removing the spatial-softmax branch without losing the primary aggregate metrics.
+
+The follow-up strict augmentation ablation kept the no-attention model and every other training/evaluation setting fixed. Axis-aware flips improved test oIoU to `0.698654`, official mIoU to `0.530917`, and class-macro mIoU to `0.553549`. Recall, F1, and Pr@0.5-0.8 improved; Precision and Pr@0.9 declined. The no-attention head with axis-aware augmentation is therefore the active mainline, with the high-IoU precision tradeoff retained as a known risk.
