@@ -20,8 +20,9 @@ class NoSpatialAttentionHeadTest(unittest.TestCase):
         self.assertFalse(hasattr(self.head, "attention_logit_scale"))
 
     def test_decoder_uses_visual_value_and_similarity_channels_only(self):
-        first_decoder_conv = self.head.mask_decoder[0].conv
-        self.assertEqual(first_decoder_conv.in_channels, self.head.embed_dim * 2 + 1)
+        expected_channels = self.head.embed_dim * 2 + 1
+        self.assertEqual(self.head.target_decoder[0].conv.in_channels, expected_channels)
+        self.assertEqual(self.head.background_decoder[0].conv.in_channels, expected_channels)
 
     def test_forward_shape_and_gradients(self):
         features = [torch.randn(2, 8, 8, 8), torch.randn(2, 8, 4, 4), torch.randn(2, 8, 2, 2)]

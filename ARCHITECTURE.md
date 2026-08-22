@@ -109,3 +109,17 @@ The same cleanup removes the unused `text_object_mask`, `text_spatial_mask`, and
 The candidate passed syntax checks, 11 directed tests, and a 2-train/2-val/2-test CUDA smoke under `runs/semseg/noattn_smoke2`. Under the legacy augmentation policy, the completed seed-42 run improved test oIoU from `0.683420` to `0.691092` and official mIoU from `0.519818` to `0.521327`, while class-macro mIoU changed from `0.545010` to `0.543093`. This supports removing the spatial-softmax branch without losing the primary aggregate metrics.
 
 The follow-up strict augmentation ablation kept the no-attention model and every other training/evaluation setting fixed. Axis-aware flips improved test oIoU to `0.698654`, official mIoU to `0.530917`, and class-macro mIoU to `0.553549`. Recall, F1, and Pr@0.5-0.8 improved; Precision and Pr@0.9 declined. The no-attention head with axis-aware augmentation is therefore the active mainline, with the high-IoU precision tradeoff retained as a known risk.
+
+## Target-Background Twin-Stream Decoder Candidate
+
+ADR-0012 changes only the final decoder inside `TextPromptSegment`. The shared P3/P4/P5 projection, text-controlled scale weighting, fusion/context blocks, FiLM conditioning, pixel-text similarity, spatial gate, and value projection remain unchanged. Their concatenated tensor is decoded by two symmetric but parameter-independent branches:
+
+```text
+decoder_input
+├─ target_decoder     -> target_logits
+└─ background_decoder -> background_logits
+
+mask_logits = target_logits - background_logits + similarity + bias
+```
+
+The public output remains one `[B, 1, H, W]` logit tensor, so the existing BCE-Tversky loss, checkpoint conventions, threshold selection, and oIoU/mIoU/Pr@ evaluation code require no interface changes. No auxiliary target/background loss is introduced; the controlled experiment changes only the decoder parameterization. The candidate must be trained from the same `yolov12n.pt` initialization and compared against `runs/semseg/noattn_aug_axis` under the same seed-42 axis-aware protocol before it can replace the active mainline.

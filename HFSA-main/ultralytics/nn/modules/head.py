@@ -271,7 +271,12 @@ class TextPromptSegment(nn.Module):
             nn.Conv2d(embed_dim, 1, 1),
         )
         self.similarity_gate_weight = nn.Parameter(torch.tensor(0.1))
-        self.mask_decoder = nn.Sequential(
+        self.target_decoder = nn.Sequential(
+            Conv(embed_dim * 2 + 1, hidden, 3),
+            Conv(hidden, hidden, 3),
+            nn.Conv2d(hidden, 1, 1),
+        )
+        self.background_decoder = nn.Sequential(
             Conv(embed_dim * 2 + 1, hidden, 3),
             Conv(hidden, hidden, 3),
             nn.Conv2d(hidden, 1, 1),
@@ -342,8 +347,10 @@ class TextPromptSegment(nn.Module):
         )
         gated_visual = visual * gate
         gated_value = value * gate
-        logits = self.mask_decoder(torch.cat([gated_visual, gated_value, similarity], 1))
-        logits = logits + similarity + self.bias
+        decoder_input = torch.cat([gated_visual, gated_value, similarity], 1)
+        target_logits = self.target_decoder(decoder_input)
+        background_logits = self.background_decoder(decoder_input)
+        logits = target_logits - background_logits + similarity + self.bias
         if self.upsample > 1:
             logits = nn.functional.interpolate(logits, scale_factor=self.upsample, mode="bilinear", align_corners=False)
         return logits

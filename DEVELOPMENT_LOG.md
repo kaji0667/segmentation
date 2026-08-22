@@ -655,3 +655,30 @@ Controlled experiment outcome:
 - Class mIoU improved for 14 of 20 classes. Largest gains: Expressway-Service-area `+0.048046`, harbor `+0.044988`, tenniscourt `+0.041026`, ship `+0.023354`, and vehicle `+0.016611`. Largest regression: stadium `-0.025539`.
 - Decision: retain the no-attention head and `axis-aware` augmentation default. Keep `legacy` available for reproduction and record the Precision/Pr@0.9 tradeoff as a follow-up risk.
 - Verified final artifacts: `best_raw.pt`, `test_results.json`, and `test_confusion_matrix.png` exist for both runs; the sequential training process exited normally.
+
+## 2026-08-23
+
+### Target-Background Twin-Stream Decoder Candidate
+
+Context:
+- The accepted comparison baseline is `runs/semseg/noattn_aug_axis`: test `oIoU=0.698654`, `mIoU=0.530917`, and `Pr@0.5-0.9=0.600115/0.516806/0.407354/0.295030/0.142488`.
+- The experiment is constrained to the post-fusion binary-mask decoder. YOLOv12 backbone, neck, OpenCLIP, dataset, loss, augmentation, checkpoint selection, and evaluation protocol remain fixed.
+
+Changes:
+- Replaced the single final decoder in `TextPromptSegment` with symmetric, parameter-independent `target_decoder` and `background_decoder` branches.
+- Kept the decoder input unchanged: gated visual features, gated value features, and pixel-text similarity.
+- Combined the branches as `target_logits - background_logits + similarity + bias`, preserving the external `[B,1,H,W]` logits interface.
+- Added directed tests for input channels, parameter independence, output shape, gradients through both branches, and subtraction sign.
+
+Controlled full command:
+```bash
+GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
+SAVE_DIR=runs/semseg/tbtd bash run_semseg_preset.sh baseline
+```
+
+Status:
+- Python compilation passed.
+- `python -m unittest discover -s tests -p "test_semseg_*.py" -v`: 14 tests passed.
+- CUDA smoke completed 2 train, 2 validation, and 2 test batches under `runs/semseg/tbtd_smoke_20260823`; `best_raw.pt`, strict checkpoint loading, and `test_results.json` generation passed.
+- Smoke trainable parameter count is `3,075,913`, an increase of `444,161` over the no-attention single-decoder candidate.
+- Full training and final test metrics remain pending.

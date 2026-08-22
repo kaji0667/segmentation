@@ -123,3 +123,9 @@
 - 轴感知策略提升了 oIoU、官方 mIoU、类别宏平均、Recall、F1 和 Pr@0.5-0.8，但 Precision 与 Pr@0.9 有所下降。
 - 20 个语义类别中有 14 个 class-mIoU 提升，最大收益来自 Expressway-Service-area、harbor、tenniscourt、ship 和 vehicle；stadium 回退最大。
 - 结论：保留 no-attention head 与 `axis-aware` 默认增强；`legacy` 继续作为可复现实验选项。
+
+### 20. 目标-背景双流解码候选
+- 仅修改 `TextPromptSegment` 最后的二值掩膜解码：共享融合输入分别送入参数独立且结构对称的目标流和背景流。
+- 最终输出为 `target_logits - background_logits + similarity + bias`，保持 `[B,1,H,W]`、现有 BCE-Tversky loss、阈值选择和测试接口不变。
+- backbone、neck、OpenCLIP、数据、增强和指标协议均未修改；不增加辅助 loss，确保相对 `noattn_aug_axis` 是单变量结构消融。
+- 新增双流参数独立、双路梯度、输出尺寸和差值符号测试；正式运行目录为 `runs/semseg/tbtd`，完成前不能称为提升。
