@@ -687,3 +687,4 @@ Status:
 - Test evaluation took `95.12s`; `best_raw.pt` is `40.66 MB`. Artifacts are under `runs/semseg/tbtd` and are not committed.
 - Relative to `noattn_aug_axis`: oIoU `-0.005503`, mIoU `+0.001727`, Pr@0.5 `-0.002298`, Pr@0.6/0.7/0.8/0.9 `+0.000575/+0.002873/+0.004022/+0.002873`, Precision `+0.007866`, Recall `-0.016912`, and F1 `-0.003827`.
 - Decision: do not replace the active single-decoder baseline. Twin-stream decoding slightly improves sample mIoU and higher-IoU success rates while reducing over-segmentation, but the oIoU and recall regression makes it a mixed, insufficient gain.
+- Mainline cleanup: restored the active single `mask_decoder` and its regression test after recording the experiment. The complete twin-stream implementation remains reproducible at commit `c718f78931930adacff123e74fa4cb03b63607b6`; experiment artifacts remain under `runs/semseg/tbtd`.
