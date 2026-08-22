@@ -663,6 +663,7 @@ Controlled experiment outcome:
 Context:
 - The accepted comparison baseline is `runs/semseg/noattn_aug_axis`: test `oIoU=0.698654`, `mIoU=0.530917`, and `Pr@0.5-0.9=0.600115/0.516806/0.407354/0.295030/0.142488`.
 - The experiment is constrained to the post-fusion binary-mask decoder. YOLOv12 backbone, neck, OpenCLIP, dataset, loss, augmentation, checkpoint selection, and evaluation protocol remain fixed.
+- Experiment source was published as commit `c718f78931930adacff123e74fa4cb03b63607b6` before full training.
 
 Changes:
 - Replaced the single final decoder in `TextPromptSegment` with symmetric, parameter-independent `target_decoder` and `background_decoder` branches.
@@ -681,4 +682,8 @@ Status:
 - `python -m unittest discover -s tests -p "test_semseg_*.py" -v`: 14 tests passed.
 - CUDA smoke completed 2 train, 2 validation, and 2 test batches under `runs/semseg/tbtd_smoke_20260823`; `best_raw.pt`, strict checkpoint loading, and `test_results.json` generation passed.
 - Smoke trainable parameter count is `3,075,913`, an increase of `444,161` over the no-attention single-decoder candidate.
-- Full training and final test metrics remain pending.
+- Full seed-42 training stopped at epoch 57 by patience=8; raw-best was epoch 49 with frozen validation threshold `0.70`.
+- Full test over 3,481 samples: `oIoU=0.693151`, `mIoU=0.532644`, `Pr@0.5-0.9=0.597817/0.517380/0.410227/0.299052/0.145361`, `Precision=0.802104`, `Recall=0.836144`, and `F1=0.818771`.
+- Test evaluation took `95.12s`; `best_raw.pt` is `40.66 MB`. Artifacts are under `runs/semseg/tbtd` and are not committed.
+- Relative to `noattn_aug_axis`: oIoU `-0.005503`, mIoU `+0.001727`, Pr@0.5 `-0.002298`, Pr@0.6/0.7/0.8/0.9 `+0.000575/+0.002873/+0.004022/+0.002873`, Precision `+0.007866`, Recall `-0.016912`, and F1 `-0.003827`.
+- Decision: do not replace the active single-decoder baseline. Twin-stream decoding slightly improves sample mIoU and higher-IoU success rates while reducing over-segmentation, but the oIoU and recall regression makes it a mixed, insufficient gain.

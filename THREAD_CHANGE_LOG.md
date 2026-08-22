@@ -129,3 +129,9 @@
 - 最终输出为 `target_logits - background_logits + similarity + bias`，保持 `[B,1,H,W]`、现有 BCE-Tversky loss、阈值选择和测试接口不变。
 - backbone、neck、OpenCLIP、数据、增强和指标协议均未修改；不增加辅助 loss，确保相对 `noattn_aug_axis` 是单变量结构消融。
 - 新增双流参数独立、双路梯度、输出尺寸和差值符号测试；正式运行目录为 `runs/semseg/tbtd`，完成前不能称为提升。
+
+### 21. 目标-背景双流完整实验结果
+- 正式实验在第 57 轮早停，raw-best 为第 49 轮，冻结阈值 `0.70`；完整 test 3,481 样本。
+- test：`oIoU=0.693151`、`mIoU=0.532644`、`Pr@0.5-0.9=0.597817/0.517380/0.410227/0.299052/0.145361`。
+- 相对 `noattn_aug_axis`：mIoU 与 Pr@0.6-0.9 小幅提升，Precision 提升且预测正像素率更接近目标；但 oIoU、Pr@0.5、Recall 和 F1 回退。
+- 结论：双流不是全面提升，不替代当前 no-attention axis-aware 单流主线；实验代码、测试和产物保留供后续研究更强的目标/背景互补约束。

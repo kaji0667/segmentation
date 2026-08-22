@@ -2,7 +2,7 @@
 
 ## 状态
 
-Accepted for controlled experiment
+Rejected as mainline after controlled experiment
 
 ## 背景
 
@@ -39,3 +39,16 @@ target_logits - background_logits + similarity + bias
 - 测试：`HFSA-main/tests/test_semseg_target_background_decoder.py`
 - 基线：`HFSA-main/runs/semseg/noattn_aug_axis`
 - 候选实验：`HFSA-main/runs/semseg/tbtd`
+
+## 实验结果
+
+正式 seed-42 实验在 epoch 57 早停，`best_raw.pt` 来自 epoch 49，冻结 validation 阈值为 `0.70`。完整 test 3,481 样本结果：
+
+- `oIoU=0.693151`
+- `mIoU=0.532644`
+- `Pr@0.5-0.9=0.597817/0.517380/0.410227/0.299052/0.145361`
+- `Precision/Recall/F1=0.802104/0.836144/0.818771`
+
+相对 `noattn_aug_axis`，mIoU 增加 `0.001727`，Pr@0.6-0.9 分别增加 `0.000575/0.002873/0.004022/0.002873`，Precision 增加 `0.007866`，预测正像素率从 `0.050106` 降至 `0.048631`，更接近目标正像素率 `0.046651`。但 oIoU 下降 `0.005503`，Pr@0.5 下降 `0.002298`，Recall 下降 `0.016912`，F1 下降 `0.003827`。
+
+因此该结构显示出轻微的样本级/高阈值精度收益和外溢收敛，但牺牲整体累计交并比与召回，且 mIoU 增益很小。它不替代当前 no-attention axis-aware 主线；若后续重新研究，应作为需要独立监督或更强互补约束的候选，而不是直接重复本实验。
