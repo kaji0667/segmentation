@@ -688,3 +688,15 @@ Status:
 - Relative to `noattn_aug_axis`: oIoU `-0.005503`, mIoU `+0.001727`, Pr@0.5 `-0.002298`, Pr@0.6/0.7/0.8/0.9 `+0.000575/+0.002873/+0.004022/+0.002873`, Precision `+0.007866`, Recall `-0.016912`, and F1 `-0.003827`.
 - Decision: do not replace the active single-decoder baseline. Twin-stream decoding slightly improves sample mIoU and higher-IoU success rates while reducing over-segmentation, but the oIoU and recall regression makes it a mixed, insufficient gain.
 - Mainline cleanup: restored the active single `mask_decoder` and its regression test after recording the experiment. The complete twin-stream implementation remains reproducible at commit `c718f78931930adacff123e74fa4cb03b63607b6`; experiment artifacts remain under `runs/semseg/tbtd`.
+
+### Markdown Source Migration for AI Reading
+
+Scope:
+- Registered the MinerU Markdown conversions as the preferred AI-readable sources for the competition plan, two organizer Q&A documents, and the local RRSIS literature corpus.
+- Updated `PROJECT_RULES.md`, `AGENTS.md`, and `LITERATURE_READING_GUIDE.md`; no model, data, training, or evaluation code changed.
+
+Verification:
+- Confirmed 19 root-level `MinerU_markdown_*.md` files totaling about 1.07 MB.
+- Confirmed the competition plan and both Q&A conversions contain searchable headings and text.
+- Confirmed 16 converted papers contain external MinerU image references; rules now require cross-checking figures, tables, formulas, and OCR-sensitive claims.
+- Kept the 19 converted source documents local and out of the public Git commit because they contain full paper text and organizer contact information; public redistribution requires explicit user approval.
