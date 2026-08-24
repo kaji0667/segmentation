@@ -124,6 +124,14 @@
 - 20 个语义类别中有 14 个 class-mIoU 提升，最大收益来自 Expressway-Service-area、harbor、tenniscourt、ship 和 vehicle；stadium 回退最大。
 - 结论：保留 no-attention head 与 `axis-aware` 默认增强；`legacy` 继续作为可复现实验选项。
 
+### 19. 最终指标精简与固定 checkpoint 复评
+- 按最终确认口径，核心指标固定为 oIoU、mIoU 和 Pr@0.5-0.9；不再使用含义可能冲突的 cIoU/gIoU 别名。
+- 最终报告删除每类别 IoU、class-macro-mIoU、pixel accuracy、背景/前景二分类 mIoU、class-oIoU 和历史 `target_iou`/`sample_miou` 别名；训练代码中的兼容字段不做破坏性删除。
+- 使用 `noattn_aug_axis/weights/best_raw.pt`（epoch 53）和验证集冻结阈值 `0.70` 重新评估全部 3,481 个 test 表达样本，没有重新训练或修改模型结构。
+- 复评结果：`oIoU=0.698654`、`mIoU=0.530917`、`Pr@0.5/0.6/0.7/0.8/0.9=0.600115/0.516806/0.407354/0.295030/0.142488`；与原测试结果一致。Precision、Recall 和 F1 仅作为非核心辅助诊断。
+- 原始文本端到端 batch=1 平均/P95 为 `141.48/179.83 ms`，峰值 GPU `1,754.27 MB`，峰值进程 RSS `4,638.53 MB`；统计包含 JPEG 解码、OpenCLIP 文本编码、分割和阈值后处理。
+- 新结果存于 `runs/semseg/noattn_aug_axis/final_evaluation_20260822.json` 与 `.md`，旧 `test_results.json` 未覆盖。
+
 ### 20. 目标-背景双流解码候选
 - 仅修改 `TextPromptSegment` 最后的二值掩膜解码：共享融合输入分别送入参数独立且结构对称的目标流和背景流。
 - 最终输出为 `target_logits - background_logits + similarity + bias`，保持 `[B,1,H,W]`、现有 BCE-Tversky loss、阈值选择和测试接口不变。
@@ -137,9 +145,39 @@
 - 结论：双流不是全面提升，不替代当前 no-attention axis-aware 单流主线；实验代码、测试和产物保留供后续研究更强的目标/背景互补约束。
 - 活动源码随后恢复为单流 `mask_decoder`；双流完整实现保留在 Git 提交 `c718f78`，结果文档与本地实验产物继续保留。
 
-### 22. PDF 转 Markdown 后的资料入口更新
+### 22. 图像条件双向 token adapter 完整实验与回退
+- 在 `TextPromptSegment` 内加入低分辨率 `8 x 8` region-token 双向交互：text 查询 visual regions，regions 再查询 adapted text；两个 residual gate 均从零初始化。
+- 14 项语义分割测试与 2-train/2-val/2-test CUDA smoke 通过；完整 `bta_axis` 在第 55 轮早停，raw-best 为第 47 轮，冻结阈值 `0.80`，test 覆盖 3,481 样本。
+- test：`oIoU=0.694395`、`mIoU=0.539623`、`Pr@0.5-0.9=0.602126/0.521689/0.422867/0.304797/0.152255`。
+- 相对 `noattn_aug_axis`：mIoU `+0.008707` 且全部 Pr 指标提升，但 oIoU `-0.004259`、Recall `-0.016560`、F1 `-0.002960`；参数、延迟和显存也增加。
+- checkpoint 中 text/visual gate 的 `tanh` 为 `-0.015298/-0.064627`，说明交互分支实际参与训练；混合结果不是 gate 未开启所致。
+- 结论：它改善逐样本与高 IoU 成功率，但不是对综合最优的明确超越。活动源码已恢复为 no-attention、axis-aware、单解码主线，候选仅保留本地实验产物，未推送 GitHub。
+
+### 23. 文本贯穿渐进 decoder 完整实验与回退
+- 在 `TextPromptSegment` 内实现共享参数的 P5→P4→P3 top-down decoder，每一级重复使用文本 FiLM、像素文本相似度、空间门控、value 分支和同一个 mask decoder。
+- P5/P4 仅通过零初始化可学习 gate 作为内部 residual 加到 P3；没有增加 P3/P4/P5 辅助 loss，最终仍只输出一个二值 mask。
+- 20 项测试与 2-train/2-val/2-test CUDA smoke 通过；完整 `tpd_axis` 在第 37 轮早停，raw-best 为第 29 轮，冻结阈值 `0.60`。
+- test：`oIoU=0.685062`、`mIoU=0.511833`、`Pr@0.5-0.9=0.557886/0.482045/0.377190/0.275783/0.130997`。
+- 相对 `noattn_aug_axis`，oIoU `-0.013592`、mIoU `-0.019084`，全部 Pr、Recall 和 F1 均回退；参数增加 295,426，平均 test 延迟从 `23.17` 增至 `28.64 ms/sample`。
+- 两个粗尺度 gate 的 tanh 为 `0.325729/0.439594`，说明残差实际启用。候选被拒绝，活动源码恢复单 decoder 基线后再进入学习型语义角色 pooling 实验。
+
+### 23. PDF 转 Markdown 后的资料入口更新
 - 比赛方案首选入口改为根目录 MinerU Markdown；涉及比赛评测、报告或提交要求时，按需读取两次统一答疑 Markdown。
 - 根目录其他 `MinerU_markdown_*.md` 登记为本地 RRSIS 论文语料库，按任务和标题选择相关论文，不为无关任务全量读取。
 - Markdown 优先用于检索和章节定位；公式、表格、结构图、页码和 OCR 可疑内容必须通过原图、公开论文或源码交叉核对。
 - 19 份转换稿保留在本地，不随本次规则更新公开提交；论文全文和比赛联系方式只有在用户明确确认后才能发布。
 - 本次仅修改资料阅读与文档规则，没有改变模型、训练或评估实现。
+### 24. 学习型目标/关系/位置 token pooling 完整实验
+- 在共享 token scorer 上增加三个零初始化角色 residual scorer；target 用于 FiLM，relation 用于尺度选择，target/relation 均值用于主相似度，position 通过独立相似度和零初始化 gate 进入 spatial gate。
+- 19 项全量测试与 2-train/2-val/2-test CUDA smoke 通过；正式 `srp_axis` 在第 52 轮早停，raw-best 为第 44 轮，冻结阈值 `0.80`。
+- test：`oIoU=0.700990`、`mIoU=0.539022`、`Pr@0.5-0.9=0.598391/0.516231/0.413100/0.305085/0.151106`。
+- 相对 `noattn_aug_axis`，oIoU 与 mIoU 同时提升，Pr@0.6-0.9、Precision 和 F1 提升；Pr@0.5 与 Recall 轻微回退，参数增加 100,740，平均 test 延迟增加 5.78 ms/sample。
+- 三个角色 scorer、角色 bias 和 position gate 均明显分化。该候选作为第三项 uncertainty-gated P2 residual 的受控基座，待第三项结束后统一决定。
+
+### 25. 不确定边界 P2 residual 完整实验、回退与最终发布选择
+- P2 仅作为独立 residual 使用，不进入 P3/P4/P5 coarse fusion；硬 mask 同时要求 detached uncertainty `>=0.5` 和 3x3 boundary strength `>=0.05`。
+- 23 项测试与 CUDA smoke 通过；正式 `p2ubr_axis` 在第 52 轮早停，raw-best 为第 44 轮，冻结阈值 `0.80`。
+- test：`oIoU=0.694145`、`mIoU=0.535108`、`Pr@0.5-0.9=0.593795/0.510773/0.404194/0.300201/0.151681`。
+- 相对 `srp_axis`，两个主 IoU、Pr@0.5-0.8、Precision、Recall 和 F1 均回退，仅 Pr@0.9 `+0.000575`；参数增至 `4,821,421`，平均评测耗时 `86.04 ms/sample`，峰值 GPU `558.66 MB`。
+- residual 最后一层权重范数 `1.011367`；完整 test mask 平均覆盖 `1.9474%` 像素，说明 P2 分支确实学习且只局部启用。
+- 结论：拒绝 P2 residual，移除活动配置、测试和 head 分支；恢复第 24 项学习型 target/relation/position pooling 作为综合最优并提交推送。

@@ -261,7 +261,11 @@ class TextPromptSegment(nn.Module):
         self.text_token_score = nn.Linear(self.text_dim, 1, bias=False)
         self.valid_token_bias = nn.Parameter(torch.zeros(1))
         nn.init.zeros_(self.text_token_score.weight)
+        self.role_token_score = nn.Linear(self.text_dim, 3, bias=False)
+        self.role_valid_token_bias = nn.Parameter(torch.zeros(3))
+        nn.init.zeros_(self.role_token_score.weight)
         self.text_proj = nn.Linear(self.text_dim, embed_dim)
+        self.position_text_proj = nn.Linear(self.text_dim, embed_dim)
         self.value_proj = nn.Conv2d(embed_dim, embed_dim, 1)
         self.film = nn.Linear(self.text_dim, embed_dim * 2)
         nn.init.zeros_(self.film.weight)
@@ -271,6 +275,7 @@ class TextPromptSegment(nn.Module):
             nn.Conv2d(embed_dim, 1, 1),
         )
         self.similarity_gate_weight = nn.Parameter(torch.tensor(0.1))
+        self.position_gate_weight = nn.Parameter(torch.zeros(1))
         self.mask_decoder = nn.Sequential(
             Conv(embed_dim * 2 + 1, hidden, 3),
             Conv(hidden, hidden, 3),
@@ -291,6 +296,21 @@ class TextPromptSegment(nn.Module):
         weights = torch.softmax(scores, dim=1)
         return torch.sum(text_tokens * weights.unsqueeze(-1), dim=1)
 
+    def _pool_text_roles(
+        self,
+        text_tokens,
+        text_token_mask=None,
+    ):
+        """Pool target, relation, and position roles while matching shared pooling at initialization."""
+        shared_scores = self.text_token_score(text_tokens)
+        role_scores = shared_scores + self.role_token_score(text_tokens)
+        if text_token_mask is not None:
+            valid_mask = text_token_mask.to(device=text_tokens.device, dtype=text_tokens.dtype)
+            role_bias = self.valid_token_bias + self.role_valid_token_bias
+            role_scores = role_scores + valid_mask.unsqueeze(-1) * role_bias.view(1, 1, 3)
+        weights = torch.softmax(role_scores, dim=1)
+        return torch.einsum("btr,btd->brd", weights, text_tokens)
+
     def forward(
         self,
         x,
@@ -307,15 +327,21 @@ class TextPromptSegment(nn.Module):
                 class_idx = torch.zeros(bs, dtype=torch.long, device=device)
             class_idx = class_idx.to(device=device, dtype=torch.long).view(-1)
             text_vector = self.class_embed(class_idx)
+            text_roles = text_vector.unsqueeze(1).expand(-1, 3, -1)
         else:
             text_vector = text_embedding.to(device=device, dtype=x[0].dtype)
             if text_vector.ndim == 3:
-                text_vector = self._pool_text_tokens(
+                text_roles = self._pool_text_roles(
                     text_vector,
                     text_token_mask=text_token_mask,
                 )
+            else:
+                text_roles = text_vector.unsqueeze(1).expand(-1, 3, -1)
 
-        scale_weight = (torch.softmax(self.scale_gate(text_vector), dim=1) * self.nl).view(bs, self.nl, 1, 1, 1)
+        target_text, relation_text, position_text = text_roles.unbind(dim=1)
+        similarity_text = 0.5 * (target_text + relation_text)
+
+        scale_weight = (torch.softmax(self.scale_gate(relation_text), dim=1) * self.nl).view(bs, self.nl, 1, 1, 1)
         feats = []
         for i, feat in enumerate(x):
             feat = self.proj[i](feat)
@@ -325,28 +351,35 @@ class TextPromptSegment(nn.Module):
             feats.append(feat)
 
         visual = self.pixel_proj(self.context(self.fuse(torch.cat(feats, 1))))
-        gamma, beta = self.film(text_vector).chunk(2, dim=1)
+        gamma, beta = self.film(target_text).chunk(2, dim=1)
         gamma = torch.tanh(gamma).view(bs, self.embed_dim, 1, 1)
         beta = beta.view(bs, self.embed_dim, 1, 1)
-        text_embedding = self.text_proj(text_vector).view(bs, self.embed_dim, 1, 1)
+        text_embedding = self.text_proj(similarity_text).view(bs, self.embed_dim, 1, 1)
+        position_embedding = self.position_text_proj(position_text).view(bs, self.embed_dim, 1, 1)
         visual = visual * (1.0 + gamma) + beta
         visual_norm = nn.functional.normalize(visual, dim=1)
         text_embedding = nn.functional.normalize(text_embedding, dim=1)
+        position_embedding = nn.functional.normalize(position_embedding, dim=1)
         similarity = (visual_norm * text_embedding).sum(1, keepdim=True)
+        position_similarity = (visual_norm * position_embedding).sum(1, keepdim=True)
 
         value = self.value_proj(visual)
 
         gate = torch.sigmoid(
             self.spatial_gate(visual)
             + self.similarity_gate_weight * similarity
+            + self.position_gate_weight * position_similarity
         )
         gated_visual = visual * gate
         gated_value = value * gate
-        logits = self.mask_decoder(torch.cat([gated_visual, gated_value, similarity], 1))
-        logits = logits + similarity + self.bias
+        coarse_logits = self.mask_decoder(torch.cat([gated_visual, gated_value, similarity], 1))
+        coarse_logits = coarse_logits + similarity + self.bias
+
         if self.upsample > 1:
-            logits = nn.functional.interpolate(logits, scale_factor=self.upsample, mode="bilinear", align_corners=False)
-        return logits
+            coarse_logits = nn.functional.interpolate(
+                coarse_logits, scale_factor=self.upsample, mode="bilinear", align_corners=False
+            )
+        return coarse_logits
 
 
 class OBB(Detect):

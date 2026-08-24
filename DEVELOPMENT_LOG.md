@@ -656,6 +656,40 @@ Controlled experiment outcome:
 - Decision: retain the no-attention head and `axis-aware` augmentation default. Keep `legacy` available for reproduction and record the Precision/Pr@0.9 tradeoff as a follow-up risk.
 - Verified final artifacts: `best_raw.pt`, `test_results.json`, and `test_confusion_matrix.png` exist for both runs; the sequential training process exited normally.
 
+## 2026-08-22
+
+### Final Standardized Test Evaluation
+
+Scope:
+- Re-evaluated the accepted final checkpoint; no retraining and no model-source changes were performed.
+- Checkpoint: `HFSA-main/runs/semseg/noattn_aug_axis/weights/best_raw.pt`, raw-best epoch 53.
+- Protocol: official RRSIS-D test split, 3,481 expression-mask samples, image size 512, frozen validation-selected threshold `0.70`.
+- Reproduction command: `PYTHONPATH=. python /mnt/d/code/python/HFSA/tmp/run_final_standardized_evaluation.py` in the WSL project environment.
+
+Final official metrics:
+- `oIoU/cIoU=0.6986542302`
+- `mIoU/gIoU=0.5309167877`
+- `Pr@0.5/0.6/0.7/0.8/0.9=0.6001149095/0.5168055157/0.4073542086/0.2950301637/0.1424877909`
+
+Required diagnostics:
+- `Precision=0.7942385365`, `Recall=0.8530562803`, `F1=0.8225973453`
+- Predicted-positive rate `0.0501062349`; target-positive rate `0.0466514386`
+
+Resource evidence on NVIDIA GeForce RTX 4060 Laptop GPU:
+- Segmentation parameters: `3,971,624`; currently loaded full system including OpenCLIP: `431,588,137`.
+- Segmentation checkpoint `35.57 MB`; OpenCLIP weights `889.56 MB`; combined weight files `925.12 MB`.
+- Cached-text batch-1 mean/P95: `30.13/45.11 ms`, peak GPU memory `123.04 MB`.
+- Raw-text end-to-end batch-1 mean/P95: `141.48/179.83 ms`, peak GPU memory `1,754.27 MB`.
+- Peak process CPU RSS: `4,638.53 MB`.
+
+Reporting decision and verification:
+- Core metrics are fixed to oIoU, mIoU, and Pr@0.5-0.9.
+- Final reports omit per-category IoU, class-macro-mIoU, pixel accuracy, background/foreground binary mIoU, class-oIoU, and legacy aliases; internal compatibility behavior remains unchanged.
+- The re-evaluated official and diagnostic metrics match the previous `test_results.json` values, confirming deterministic metric reproduction for the fixed checkpoint and threshold.
+- Outputs: `HFSA-main/runs/semseg/noattn_aug_axis/final_evaluation_20260822.json` and `HFSA-main/runs/semseg/noattn_aug_axis/final_evaluation_20260822.md`.
+- Source/checkpoint SHA256 values are embedded in the JSON report.
+- Git commit and push were not possible because `D:\code\python\HFSA` is not a Git work tree; no repository was initialized or overwritten.
+
 ## 2026-08-23
 
 ### Target-Background Twin-Stream Decoder Candidate
@@ -689,6 +723,63 @@ Status:
 - Decision: do not replace the active single-decoder baseline. Twin-stream decoding slightly improves sample mIoU and higher-IoU success rates while reducing over-segmentation, but the oIoU and recall regression makes it a mixed, insufficient gain.
 - Mainline cleanup: restored the active single `mask_decoder` and its regression test after recording the experiment. The complete twin-stream implementation remains reproducible at commit `c718f78931930adacff123e74fa4cb03b63607b6`; experiment artifacts remain under `runs/semseg/tbtd`.
 
+### Image-Conditioned Bidirectional Token Adapter Experiment
+
+Context and implementation:
+- The accepted comparison baseline remained `runs/semseg/noattn_aug_axis`: test `oIoU=0.698654`, `mIoU=0.530917`, and `Pr@0.5-0.9=0.600115/0.516806/0.407354/0.295030/0.142488`.
+- Added a zero-initialized residual adapter only inside `TextPromptSegment`: pooled `8 x 8` visual regions condition text tokens, then adapted text conditions visual regions.
+- Kept backbone, neck, OpenCLIP, P3/P4/P5 inputs, single decoder, loss, data, axis-aware augmentation, seed, checkpoint selection, and evaluation fixed.
+- Candidate `head.py` SHA256 before cleanup: `6EBB30F2E11E2F75DBFD35743269D5AF8D18EE1DD2EF98235DDA4C624D40A61D`.
+
+Verification and run:
+- All 14 semantic-segmentation directed/regression tests passed.
+- CUDA smoke passed 2 train, 2 validation, and 2 test batches, including strict checkpoint reload and report generation.
+- Full run: `HFSA-main/runs/semseg/bta_axis`; early stopped at epoch 55; raw-best epoch 47; validation-selected threshold `0.80`; full test 3,481 samples.
+- Full command used the existing baseline preset with `GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 SAVE_DIR=runs/semseg/bta_axis`.
+
+Test result:
+- Candidate: `oIoU=0.694395`, `mIoU=0.539623`, `Pr@0.5-0.9=0.602126/0.521689/0.422867/0.304797/0.152255`, Precision `0.803445`, Recall `0.836496`, F1 `0.819638`.
+- Relative to baseline: oIoU `-0.004259`, mIoU `+0.008707`, Pr@0.5/0.6/0.7/0.8/0.9 `+0.002011/+0.004884/+0.015513/+0.009767/+0.009767`, Precision `+0.009207`, Recall `-0.016560`, F1 `-0.002960`.
+- Predicted-positive rate was `0.048571` against target `0.046651`, closer than the baseline's `0.050106`.
+- Parameters `4,119,978` (`+148,354`), checkpoint `37.29 MB` (`+1.72 MB`), test latency `29.33 ms/sample` versus `23.17`, peak GPU `370.35 MB` versus `336.51`.
+- Checkpoint gate audit: `tanh(text_gate)=-0.015298`, `tanh(visual_gate)=-0.064627`; the adapter learned a nonzero contribution.
+
+Decision and cleanup:
+- Reject promotion. The mIoU and all Pr metrics improve, but oIoU, Recall, F1, latency, memory, and size regress; this is not the clear comprehensive improvement required for replacing the current optimum.
+- Restored active `head.py` to the published single-decoder no-attention baseline and removed the candidate-only test after preserving the experiment evidence.
+- Kept `runs/semseg/bta_axis` locally. Per user instruction, no candidate code or documentation was pushed to GitHub.
+
+## 2026-08-24
+
+### Text-Persistent Progressive Decoder Experiment
+
+Context and implementation:
+- Compared against `runs/semseg/noattn_aug_axis`: test `oIoU=0.698654`, `mIoU=0.530917`, and `Pr@0.5-0.9=0.600115/0.516806/0.407354/0.295030/0.142488`.
+- Replaced one-shot P3-aligned fusion with a shared-parameter P5→P4→P3 top-down decoder inside `TextPromptSegment`.
+- Every scale reused text FiLM, pixel-text similarity, spatial gate, value projection, and the same mask decoder.
+- P5/P4 internal mask residuals were controlled by zero-initialized learned gates; only the final combined mask received the existing loss.
+- Backbone, neck, OpenCLIP, data, loss, seed, axis-aware augmentation, checkpoint selection, and evaluation protocol were unchanged.
+
+Verification and run:
+- Python compilation passed.
+- `python -m unittest discover -s tests -p "test_*.py" -v`: 20 tests passed.
+- CUDA smoke passed 2 train, 2 validation, and 2 test batches under `runs/semseg/tpd_smoke_20260823`, including strict checkpoint reload and report generation.
+- Training and local publish copies had the same CRLF-normalized `head.py` SHA256: `a55a8799b056285717b9adac309cd91d2a321e0c3e2011b2a08e3fb03c0ca9e8`.
+- Full command: `GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 SAVE_DIR=runs/semseg/tpd_axis bash run_semseg_preset.sh baseline`.
+- Full run early stopped at epoch 37; raw-best epoch 29; frozen validation threshold `0.60`; full test 3,481 samples.
+
+Test result:
+- Candidate: `oIoU=0.685062`, `mIoU=0.511833`, `Pr@0.5-0.9=0.557886/0.482045/0.377190/0.275783/0.130997`, Precision `0.794161`, Recall `0.832965`, F1 `0.813100`.
+- Relative to baseline: oIoU `-0.013592`, mIoU `-0.019084`, every Pr metric regressed, Recall `-0.020092`, and F1 `-0.009497`.
+- Predicted-positive rate improved from `0.050106` to `0.048931` against target `0.046651`, but the better area calibration did not translate into better masks.
+- Parameters `4,267,050` (`+295,426`), checkpoint `38.96 MB` (`+3.39 MB`), mean test latency `28.64 ms/sample` versus `23.17`, peak GPU `338.38 MB` versus `336.51`.
+- Learned coarse-gate tanh values were `0.325729/0.439594`, confirming that both progressive residuals were active.
+
+Decision:
+- Reject promotion. The candidate is worse on all core metrics and less efficient.
+- Restore the published no-attention, axis-aware, single-decoder baseline before starting the learned target/relation/position token-pooling experiment.
+- Keep `runs/semseg/tpd_axis` locally; do not push candidate code to GitHub.
+
 ### Markdown Source Migration for AI Reading
 
 Scope:
@@ -700,3 +791,61 @@ Verification:
 - Confirmed the competition plan and both Q&A conversions contain searchable headings and text.
 - Confirmed 16 converted papers contain external MinerU image references; rules now require cross-checking figures, tables, formulas, and OCR-sensitive claims.
 - Kept the 19 converted source documents local and out of the public Git commit because they contain full paper text and organizer contact information; public redistribution requires explicit user approval.
+## 2026-08-24: Learned Semantic-Role Token Pooling Full Experiment
+
+Scope:
+- Added learned target/relation/position token pooling only inside `TextPromptSegment`.
+- Kept backbone, neck, OpenCLIP, data, axis-aware augmentation, BCE-Tversky loss, seed 42, batch 4, image size 512, mIoU checkpoint selection, `best_raw.pt`, and frozen-threshold test protocol unchanged.
+
+Verification before the full run:
+- Python compilation passed.
+- All 19 repository tests passed; 14 semantic-segmentation directed tests covered initialization equivalence, role differentiation, gradients, no-attention structure, token pooling, checkpoint selection, and legacy-cache routing.
+- A 2-train/2-val/2-test CUDA smoke passed under `runs/semseg/srp_smoke_20260824`.
+- Normalized SHA-256 values for the training and publication copies of `head.py` and the directed test matched.
+
+Full command:
+- `GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 SAVE_DIR=runs/semseg/srp_axis bash run_semseg_preset.sh baseline`
+
+Outcome:
+- Early stopped at epoch 52; raw-best epoch 44; frozen validation threshold `0.80`.
+- Full test: `oIoU=0.700990`, `mIoU=0.539022`, `Pr@0.5-0.9=0.598391/0.516231/0.413100/0.305085/0.151106`.
+- Precision/Recall/F1 `0.799135/0.850918/0.824214`; predicted/target positive rates `0.049674/0.046651`.
+- Parameters `4,072,364`; checkpoint `36.72 MB`; mean test latency `28.95 ms/sample`; peak GPU `339.31 MB`.
+- Relative to `noattn_aug_axis`: oIoU `+0.002336`, mIoU `+0.008105`, Pr@0.6-0.9 and F1 improved; Pr@0.5 and Recall decreased slightly.
+- Role scorer rows and role biases differentiated; position gate tanh was `-0.426264`.
+
+Decision:
+- Accept as the current comprehensive best candidate and use it as the base for uncertainty-gated P2 residual.
+- Do not commit or push yet; the user requested the P2 residual experiment after the first two experiments.
+
+## 2026-08-24: Uncertainty-Gated P2 Boundary Residual Full Experiment and Final Promotion
+
+Scope and verification:
+- Added a dedicated P2 residual on top of the accepted semantic-role pooling coarse head; P2 never entered full-image P3/P4/P5 fusion.
+- Used detached `4*p*(1-p)` uncertainty and a 3x3 probability morphological gradient; the hard residual mask required uncertainty `>=0.5` and boundary strength `>=0.05`.
+- Residual decoder last layer was zero-initialized, and the existing single-mask BCE-Tversky loss and all data/training/evaluation settings remained fixed.
+- All 23 repository tests and a 2-train/2-val/2-test CUDA smoke passed before the full run.
+
+Full run and test:
+- Run: `HFSA-main/runs/semseg/p2ubr_axis`.
+- Early stopped at epoch 52; raw-best epoch 44; frozen threshold `0.80`; full test 3,481 samples.
+- Test: `oIoU=0.694145`, `mIoU=0.535108`, `Pr@0.5-0.9=0.593795/0.510773/0.404194/0.300201/0.151681`.
+- Precision/Recall/F1 `0.790502/0.850628/0.819463`; predicted/target positive rates `0.050200/0.046651`.
+- Parameters `4,821,421`; checkpoint `45.32 MB`; mean evaluation time `86.04 ms/sample`; peak GPU `558.66 MB`.
+- Relative to `srp_axis`: oIoU `-0.006845`, mIoU `-0.003914`, Pr@0.5-0.8 and F1 regressed; only Pr@0.9 improved by `0.000575`.
+
+Audit:
+- P2 residual last-layer weight norm `1.011367`, bias magnitude `0.100263`; P2 visual projection, FiLM, and text projection all learned nonzero parameters.
+- Full-test uncertainty-boundary coverage averaged `1.9474%`; per-image median `0.6104%`, P90 `5.2979%`, max `34.3018%`; `187/3481` images had zero coverage.
+- The negative result therefore reflects an active, correctly localized P2 branch rather than a dead residual or an unconstrained full-image path.
+
+Decision:
+- Reject the P2 residual because it is worse on both primary IoU metrics, most Pr metrics, F1, parameters, latency, and memory.
+- Remove its active config/test/head branch, retain only the ADR and local run evidence, and restore learned target/relation/position token pooling as the comprehensive best.
+- Promote and publish ADR-0015 after final regression and Git review; do not include runs, checkpoints, caches, or paper full text.
+
+Final publication verification:
+- Restored training and publication copies passed Python compilation and all 19 repository tests independently.
+- A corrected 2-train/2-val/2-test CUDA smoke passed under `runs/semseg/srp_release_smoke2_20260824`, including raw-best save, strict reload, and test report generation.
+- Normalized SHA-256 matched between training and publication copies: `head.py=3109e5ca32a50d09a0dcee3bf83a06bb5c88f98561e46ffc85d0073aba487230`, semantic-role test `61d12722cd315348e19eef0e4ea9258a42bbaac29219d63b3ee27f4b344ef60f`.
+- Final staged scope contains only the active head, directed test, ADR-0013 through ADR-0016, architecture, development log, and thread log; `git diff --check` passed.

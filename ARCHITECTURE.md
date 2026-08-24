@@ -125,3 +125,33 @@ mask_logits = target_logits - background_logits + similarity + bias
 The public output remains one `[B, 1, H, W]` logit tensor, so the existing BCE-Tversky loss, checkpoint conventions, threshold selection, and oIoU/mIoU/Pr@ evaluation code require no interface changes. No auxiliary target/background loss is introduced; the controlled experiment changes only the decoder parameterization. The candidate must be trained from the same `yolov12n.pt` initialization and compared against `runs/semseg/noattn_aug_axis` under the same seed-42 axis-aware protocol before it can replace the active mainline.
 
 The controlled run stopped at epoch 57 and selected raw-best epoch 49 with threshold `0.70`. Test results were `oIoU=0.693151`, `mIoU=0.532644`, and `Pr@0.5-0.9=0.597817/0.517380/0.410227/0.299052/0.145361`. Compared with `noattn_aug_axis`, mIoU and Pr@0.6-0.9 improved slightly, while oIoU, Pr@0.5, Recall, and F1 regressed. The lower predicted-positive rate reduced over-segmentation, but the corresponding recall loss prevented an aggregate improvement. The twin-stream decoder is therefore rejected as the active mainline; the single-decoder no-attention axis-aware model remains current.
+
+## Rejected Image-Conditioned Bidirectional Token Adapter
+
+ADR-0013 evaluated a low-resolution bidirectional adapter inspired by recent RRSIS vision-language interaction designs. The adapter pooled the pre-weighted P3/P4/P5 projections into `8 x 8` visual region tokens, allowed OpenCLIP text tokens to query those regions, then allowed the regions to query the adapted text. Independent zero-initialized residual gates preserved the baseline behavior at initialization. Backbone, neck, OpenCLIP, loss, decoder, data, augmentation, and evaluation were unchanged.
+
+The full seed-42 run stopped at epoch 55 and selected raw-best epoch 47 with threshold `0.80`. Test results were `oIoU=0.694395`, `mIoU=0.539623`, and `Pr@0.5-0.9=0.602126/0.521689/0.422867/0.304797/0.152255`. Compared with `noattn_aug_axis`, mIoU increased by `0.008707` and every Pr metric increased, but oIoU decreased by `0.004259`, Recall by `0.016560`, and F1 by `0.002960`. The learned text/visual gate tanh values were `-0.015298/-0.064627`, confirming that the adapter was active. It also added 148,354 parameters and increased test latency and peak GPU memory.
+
+Because the result is a tradeoff rather than a clear aggregate improvement, the adapter is rejected as the active architecture. The current model remains the no-attention token-pooling head with axis-aware augmentation and a single mask decoder. Local experiment artifacts remain under `runs/semseg/bta_axis`; candidate source is not published.
+
+## Rejected Text-Persistent Progressive Decoder
+
+ADR-0014 evaluated a P5→P4→P3 top-down mask decoder inspired by CADFormer TCMD, LSCF CLA, and SRGFormer PMR. P3/P4/P5 retained the existing text-controlled scale weights. A shared text FiLM, pixel-text similarity, spatial gate, value branch, and mask decoder were executed at every scale. P5/P4 mask logits entered the final P3 result only through zero-initialized learned residual gates, and only the final output received the existing BCE-Tversky loss.
+
+The seed-42 run stopped at epoch 37 and selected raw-best epoch 29 with threshold `0.60`. Test results were `oIoU=0.685062`, `mIoU=0.511833`, and `Pr@0.5-0.9=0.557886/0.482045/0.377190/0.275783/0.130997`. Every core metric regressed against `noattn_aug_axis`; Recall and F1 also decreased. Parameters increased by 295,426 and mean test latency increased from `23.17` to `28.64 ms/sample`. Both coarse residual gates learned nonzero values, so the negative result reflects the active progressive path. The candidate is rejected and the single-decoder mainline is restored before the semantic-role pooling experiment.
+
+## Active Learned Semantic-Role Token Pooling
+
+ADR-0015 extends the no-attention head with three end-to-end token-pooling residual scorers for target, relation, and position roles. Target conditions FiLM, relation controls P3/P4/P5 scale weights, the target/relation mean supplies the primary pixel-text similarity, and position supplies an independent cosine map through a zero-initialized scalar spatial-gate path. It does not use heuristic word masks or spatial softmax.
+
+The seed-42 run `runs/semseg/srp_axis` stopped at epoch 52 and selected raw-best epoch 44 with frozen threshold `0.80`. Full test results were `oIoU=0.700990`, `mIoU=0.539022`, and `Pr@0.5-0.9=0.598391/0.516231/0.413100/0.305085/0.151106`. Relative to `noattn_aug_axis`, both primary IoU metrics, Pr@0.6-0.9, Precision, and F1 improved. The learned role scorers and position gate were materially nonzero and differentiated.
+
+This is the active comprehensive best architecture. The follow-up uncertainty-gated P2 residual experiment did not exceed it, so this P3/P4/P5 semantic-role pooling head is restored for publication.
+
+## Rejected Uncertainty-Gated P2 Boundary Residual
+
+ADR-0016 evaluated a dedicated P2 residual on top of the active semantic-role pooling head. P2 was excluded from coarse P3/P4/P5 fusion and could modify logits only where detached coarse predictions were both uncertain and locally boundary-like. The residual decoder was zero-initialized, used P2 visual/text similarity plus coarse context, and retained the existing single-mask BCE-Tversky supervision.
+
+The seed-42 run `runs/semseg/p2ubr_axis` stopped at epoch 52 and selected raw-best epoch 44 with threshold `0.80`. Full test results were `oIoU=0.694145`, `mIoU=0.535108`, and `Pr@0.5-0.9=0.593795/0.510773/0.404194/0.300201/0.151681`. Relative to `srp_axis`, both primary IoU metrics, Pr@0.5-0.8, Precision, Recall, and F1 regressed; only Pr@0.9 improved by `0.000575`.
+
+The residual last-layer weight norm was `1.011367`, and the complete test mask covered `1.9474%` of pixels on average, confirming that the P2 path learned and obeyed the boundary-only constraint. It nevertheless added `749,057` parameters and increased mean evaluation time from `28.95` to `86.04 ms/sample` and peak GPU memory from `339.31` to `558.66 MB`. The candidate is rejected; its active source/config/test are removed, while the local run and ADR retain the negative evidence.
