@@ -181,3 +181,9 @@
 - 相对 `srp_axis`，两个主 IoU、Pr@0.5-0.8、Precision、Recall 和 F1 均回退，仅 Pr@0.9 `+0.000575`；参数增至 `4,821,421`，平均评测耗时 `86.04 ms/sample`，峰值 GPU `558.66 MB`。
 - residual 最后一层权重范数 `1.011367`；完整 test mask 平均覆盖 `1.9474%` 像素，说明 P2 分支确实学习且只局部启用。
 - 结论：拒绝 P2 residual，移除活动配置、测试和 head 分支；恢复第 24 项学习型 target/relation/position pooling 作为综合最优并提交推送。
+
+### 26. 语义分割主线切换为 YOLOv12m 初始化
+- 保留 ADR-0015 学习型 target/relation/position token pooling、P3/P4/P5、OpenCLIP、loss、axis-aware 增强和评估协议不变。
+- `train_semseg.py` 与 `run_semseg_preset.sh` 现在默认使用 `yolov12m-semseg.yaml` 和 `pretrain_model/yolov12m.pt`；m alias 复用统一 YAML，但明确解析 `scale=m`，避免只换权重导致通道不匹配。
+- 静态审计确认总参数 `20,273,356`，预训练权重匹配 `678/762` tensors；冻结 backbone 后 trainable/frozen 为 `9,493,644/10,794,304`。
+- 21 项测试、batch 2 smoke 和 baseline batch 4 的 2-train/2-val/2-test CUDA smoke 均通过；正式 seed-42 完整运行目录为 `runs/semseg/srp_yolov12m_axis`。

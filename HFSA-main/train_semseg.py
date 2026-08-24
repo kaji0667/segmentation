@@ -24,8 +24,8 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--data", type=str, default="pre_datasets/RRSIS-D_refseg/data.yaml", help="Semantic dataset yaml.")
-    parser.add_argument("--model", type=str, default="ultralytics/cfg/models/v12/yolov12-semseg.yaml", help="Model yaml.")
-    parser.add_argument("--weights", type=str, default="yolov12n.pt", help="Optional YOLO pretrained weights for backbone/neck initialization; empty disables loading.")
+    parser.add_argument("--model", type=str, default="ultralytics/cfg/models/v12/yolov12m-semseg.yaml", help="Model yaml.")
+    parser.add_argument("--weights", type=str, default="pretrain_model/yolov12m.pt", help="Optional YOLO pretrained weights for backbone/neck initialization; empty disables loading.")
     parser.add_argument("--epochs", type=int, default=1, help="Number of epochs.")
     parser.add_argument("--batch", type=int, default=2, help="Batch size.")
     parser.add_argument("--imgsz", type=int, default=128, help="Square training image size.")

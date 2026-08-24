@@ -849,3 +849,27 @@ Final publication verification:
 - A corrected 2-train/2-val/2-test CUDA smoke passed under `runs/semseg/srp_release_smoke2_20260824`, including raw-best save, strict reload, and test report generation.
 - Normalized SHA-256 matched between training and publication copies: `head.py=3109e5ca32a50d09a0dcee3bf83a06bb5c88f98561e46ffc85d0073aba487230`, semantic-role test `61d12722cd315348e19eef0e4ea9258a42bbaac29219d63b3ee27f4b344ef60f`.
 - Final staged scope contains only the active head, directed test, ADR-0013 through ADR-0016, architecture, development log, and thread log; `git diff --check` passed.
+
+## 2026-08-24: Switch Semantic Segmentation Initialization to YOLOv12m
+
+Scope:
+- Kept the accepted ADR-0015 semantic-role pooling head, P3/P4/P5 wiring, OpenCLIP cache, loss, axis-aware augmentation, sampler, checkpoint selection, and evaluation unchanged.
+- Changed the training entry and reusable preset from the implicit n-scale model plus `yolov12n.pt` to the matched m-scale alias `yolov12m-semseg.yaml` plus local `pretrain_model/yolov12m.pt`.
+- Added ADR-0018 and a regression test covering both CLI defaults and m-scale alias resolution.
+
+Verification before the full run:
+- Static construction resolved `scale=m`; total parameters are `20,273,356`.
+- Pretrained loading matched `678/762` tensors and skipped only the custom final head prefix `model.21.*`.
+- With the backbone frozen, trainable/frozen parameters are `9,493,644/10,794,304`.
+- Python compilation, `bash -n`, and all 21 repository tests passed.
+- A 2-train/2-val/2-test CUDA smoke passed at batch 2 under `runs/semseg/srp_yolov12m_smoke_20260824`.
+- A baseline-hyperparameter 2-train/2-val/2-test CUDA smoke passed at batch 4 under `runs/semseg/srp_yolov12m_b4_smoke_20260824`; checkpoint save, strict reload, and frozen-threshold test report generation all succeeded.
+
+Planned controlled full command:
+```bash
+GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
+SAVE_DIR=runs/semseg/srp_yolov12m_axis bash run_semseg_preset.sh baseline
+```
+
+Status:
+- Full seed-42 training and complete 3,481-sample test are pending.

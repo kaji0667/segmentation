@@ -36,7 +36,7 @@ Large or machine-local artifacts are intentionally not tracked:
 
 ## Typical Training
 
-After preparing the RRSIS-D dataset locally and placing the pretrained YOLO weight file, run from `HFSA-main`:
+After preparing the RRSIS-D dataset locally, place `yolov12m.pt` at `HFSA-main/pretrain_model/yolov12m.pt`. The training entry and presets resolve the shared semantic-segmentation YAML with `scale=m` so the model channels match the pretrained weight. Run from `HFSA-main`:
 
 ```bash
 bash run_semseg_preset.sh baseline

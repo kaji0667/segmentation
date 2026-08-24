@@ -12,8 +12,8 @@ fi
 
 common_args=(
   --data pre_datasets/RRSIS-D_refseg/data.yaml
-  --model ultralytics/cfg/models/v12/yolov12-semseg.yaml
-  --weights yolov12n.pt
+  --model ultralytics/cfg/models/v12/yolov12m-semseg.yaml
+  --weights pretrain_model/yolov12m.pt
   --device "${DEVICE:-cuda:0}"
   --imgsz "${IMGSZ:-512}"
   --batch "${BATCH:-8}"

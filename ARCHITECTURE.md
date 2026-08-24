@@ -10,7 +10,7 @@ HFSA targets multimodal remote-sensing interpretation. The current personal bran
 - Output: one binary mask for the referred target.
 - Main training entry: `HFSA-main/train_semseg.py`.
 - Dataset adapter: `HFSA-main/dataset/rrsisd_refseg_dataset.py`.
-- Main model config: `HFSA-main/ultralytics/cfg/models/v12/yolov12-semseg.yaml`.
+- Main model config: the shared `HFSA-main/ultralytics/cfg/models/v12/yolov12-semseg.yaml`, invoked through the standard `yolov12m-semseg.yaml` scale alias.
 
 The project baseline and core YOLO/OpenCLIP code were mostly completed by the senior teammate. This branch should not modify backbone, neck, OpenCLIP encoder, or general Ultralytics internals unless explicitly reviewed and approved.
 
@@ -40,6 +40,8 @@ Restricted:
 ## Current Semantic Segmentation Training Policy
 
 - Mainline model config is non-P2: `yolov12-semseg.yaml`.
+- The active training default is now YOLOv12m: `yolov12m-semseg.yaml` resolves the shared config with `scale=m`, and backbone/neck initialization uses local `pretrain_model/yolov12m.pt`.
+- The accepted ADR-0015 n-scale result remains the comparison baseline until the controlled YOLOv12m run completes; no n-scale checkpoint is loaded into the m-scale model.
 - P2 config remains an experimental alternative, not the default mainline.
 - Small-target sampling boost default is `2.0`, reduced from the previously recommended `3.0` to avoid over-amplifying small-object samples.
 - Small-target sampling uses true foreground mask area from RLE metadata when available, with bbox area only as a fallback.
@@ -63,6 +65,8 @@ Restricted:
 ## Recent Architecture Decision Status
 
 ADR-0004 standardizes the RRSIS-D evaluation protocol while retaining legacy result fields for historical compatibility.
+
+ADR-0018 switches the requested mainline training initialization from matched YOLOv12n model/weights to matched YOLOv12m model/weights while retaining the ADR-0015 segmentation head and the established seed-42 protocol.
 
 ## RRSIS-D Evaluation Protocol
 
