@@ -44,7 +44,7 @@ After preparing the RRSIS-D dataset locally, place `yolov12m.pt` at `HFSA-main/p
 bash run_semseg_preset.sh baseline
 ```
 
-The task-specific wrappers locate `HFSA-main` automatically, so they may be called through an absolute or relative script path from any working directory:
+The task-specific wrappers locate `HFSA-main` automatically, so they may be called through an absolute or relative script path from any working directory. `train_refseg.sh` embeds the accepted baseline arguments and calls `train_semseg.py` directly; it does not require `run_semseg_preset.sh` in the deployment package:
 
 ```bash
 bash HFSA-main/scripts/train_refseg.sh

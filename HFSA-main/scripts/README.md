@@ -2,6 +2,8 @@
 
 两个脚本都会自动切换到 `HFSA-main`，其中的数据、模型、权重和输出目录均为项目相对路径，可以从任意目录调用。
 
+训练脚本已经内置当前正式 baseline 的全部参数，直接调用 `train_semseg.py`，不依赖 `run_semseg_preset.sh`。
+
 训练并在训练完成后测试：
 
 ```bash

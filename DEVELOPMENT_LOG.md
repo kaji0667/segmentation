@@ -881,12 +881,13 @@ Status:
 ## 2026-08-25: Add Project-Relative Referring-Segmentation Scripts
 
 Scope:
-- Added `scripts/train_refseg.sh` for the accepted YOLOv12m/RRSIS-D training preset and `scripts/test_refseg.sh` for independent checkpoint evaluation.
+- Added a self-contained `scripts/train_refseg.sh` that directly calls `train_semseg.py` with the accepted YOLOv12m/RRSIS-D baseline arguments, plus `scripts/test_refseg.sh` for independent checkpoint evaluation. The task scripts do not require `run_semseg_preset.sh` in the deployment package.
 - Added `train_semseg.py --eval-only --checkpoint` so testing skips train/val dataset construction and pretrained initialization, strictly reloads the requested full checkpoint, and preserves its validation-selected threshold.
 - Kept backbone, neck, OpenCLIP, segmentation head, loss, data semantics, and training hyperparameters unchanged.
 
 Verification:
 - `bash -n` passed for both Shell scripts in the publication and working copies.
-- Python compilation and all 24 repository tests passed in both copies.
+- Python compilation and all 25 repository tests passed; the added regression asserts that the training script contains no `run_semseg_preset.sh` reference.
+- Dry-run command expansion passed with `TEST_AFTER_TRAIN=0` and `TEST_AFTER_TRAIN=1`; the latter correctly appended `--test-after-train --max-test-batches`.
 - A 2-batch CUDA evaluation-only smoke loaded `srp_yolov12m_axis/weights/best_raw.pt`, reported `train samples: 0`, `val samples: 0`, `test samples: 3481`, reused threshold `0.70`, and wrote a separate `test_results.json` under `runs/semseg/srp_yolov12m_axis_eval_smoke_scripts`.
 - Normalized SHA-256 hashes match between publication and working copies for `train_semseg.py`, both scripts, the script README, and the directed test.

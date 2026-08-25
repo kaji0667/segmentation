@@ -164,6 +164,6 @@ The residual last-layer weight norm was `1.011367`, and the complete test mask c
 
 ## Referring-Segmentation Task Execution
 
-`HFSA-main/scripts/train_refseg.sh` is the task-level training wrapper. It locates `HFSA-main`, changes to that directory, and invokes the accepted `run_semseg_preset.sh baseline` path with YOLOv12m, RRSIS-D, batch 4, 60 epochs, patience 8, and test-after-train defaults. Environment variables and trailing CLI arguments may override those defaults.
+`HFSA-main/scripts/train_refseg.sh` is the self-contained task-level training wrapper. It locates `HFSA-main`, changes to that directory, and directly invokes `train_semseg.py` with the accepted baseline parameters: YOLOv12m, RRSIS-D, batch 4, 60 epochs, patience 8, and test-after-train by default. It embeds the required arguments and has no runtime dependency on `run_semseg_preset.sh`; environment variables and trailing CLI arguments may override the defaults.
 
 `HFSA-main/scripts/test_refseg.sh` is the independent evaluation wrapper. It invokes `train_semseg.py --eval-only --checkpoint ...`, builds only the official test dataset/cache/loader, strictly loads the full checkpoint, reuses the checkpoint's stored validation threshold, and writes to a separate evaluation directory. It does not build the train or validation datasets and does not load YOLO pretraining weights. All wrapper paths are repository-relative; no machine-specific drive or `/mnt` path is embedded.
