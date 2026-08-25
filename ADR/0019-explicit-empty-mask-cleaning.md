@@ -2,7 +2,7 @@
 
 ## 状态
 
-Accepted；完整 YOLOv12m 受控实验待完成。
+Accepted；完整 YOLOv12m 受控实验已完成，清洗策略保留，但新权重不替换当前发布 checkpoint。
 
 ## 背景
 
@@ -32,6 +32,17 @@ Accepted；完整 YOLOv12m 受控实验待完成。
 - 旧实验可通过 `--empty-mask-policy keep` 完整复现。
 - 新旧完整指标必须在相同的 3,480-sample cleaned test 上比较，旧 3,481-sample 报告只作为历史参考。
 
+## 完整受控实验结果（2026-08-25）
+
+- 正式目录：`runs/semseg/srp_yolov12m_axis_clean_empty`。
+- 协议：`yolov12m.pt`、m-scale、seed 42、batch 4、imgsz 512、60 epochs、patience 8、axis-aware、`empty-mask-policy=drop`、官方 mIoU 选模、完整 3,480-sample test。
+- epoch 29 保存 `last.pt` 时遇到 Windows/WSL 文件锁；增加原子 checkpoint 保存、有限重试、完整 optimizer/scheduler/early-stop/RNG 恢复和协议一致性检查后从 `last.pt` 继续。最终 epoch 39 早停，raw-best 为 epoch 31，冻结阈值 `0.80`。
+- 新模型 test：`oIoU=0.693618`、`mIoU=0.539086`、`Pr@0.5-0.9=0.598563/0.520690/0.410920/0.299713/0.154885`、Precision `0.796174`、Recall `0.843378`、F1 `0.819096`。
+- 预测/目标正像素率为 `0.049432/0.046665`；平均延迟 `22.026 ms/sample`，峰值 GPU `812.316 MB`，参数 `20,287,948`，checkpoint `150.365 MB`。
+- 使用旧 `srp_yolov12m_axis/weights/best_raw.pt` 在相同 cleaned test 公平复评：`oIoU=0.702938`、`mIoU=0.552721`、`Pr@0.5-0.9=0.624138/0.540517/0.425575/0.319253/0.164368`、Precision `0.806952`、Recall `0.845044`、F1 `0.825559`。
+- 新训练相对公平基线：oIoU `-0.009320`、mIoU `-0.013635`，五档 Pr 全部回退，Precision `-0.010778`、Recall `-0.001666`、F1 `-0.006462`；预测正像素率略升 `+0.000564`。
+- 结论：剔除确定为空的错误标注仍是正确的数据治理决策，但仅删除两条空训练 mask 没有带来泛化收益。本次新权重不替换发布 checkpoint，当前发布继续使用旧 epoch-44 checkpoint；cleaned 3,480-sample 复评作为今后的公平基线。
+
 ## 关联
 
 - `HFSA-main/dataset/rrsisd_refseg_dataset.py`
@@ -40,3 +51,5 @@ Accepted；完整 YOLOv12m 受控实验待完成。
 - `HFSA-main/scripts/test_refseg.sh`
 - `HFSA-main/tests/test_rrsisd_axis_aware_augmentation.py`
 - `runs/semseg/srp_yolov12m_clean_empty_smoke`
+- `runs/semseg/srp_yolov12m_axis_clean_empty/test_results.json`
+- `runs/semseg/srp_yolov12m_axis_clean_eval/test_results.json`

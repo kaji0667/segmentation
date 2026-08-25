@@ -15,7 +15,19 @@ from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import bias_init_with_prob, linear_init
 
-__all__ = "Detect", "CountingDetect", "Segment", "SemanticSegment", "TextPromptSegment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect"
+__all__ = (
+    "Detect",
+    "CountingDetect",
+    "Segment",
+    "SemanticSegment",
+    "TextPromptSegment",
+    "SceneClassifyHead",
+    "Pose",
+    "Classify",
+    "OBB",
+    "RTDETRDecoder",
+    "v10Detect",
+)
 
 
 class Detect(nn.Module):
@@ -181,6 +193,104 @@ class CountingDetect(Detect):
     """
 
     task_name = "counting"
+
+
+class GeMPool(nn.Module):
+    """Generalized mean pooling with a learnable exponent."""
+
+    def __init__(self, p=3.0, eps=1e-6):
+        super().__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+        self.gap = nn.AdaptiveAvgPool2d((1, 1))
+
+    def forward(self, x):
+        p = self.p.clamp(min=1.0, max=10.0)
+        return self.gap(x.clamp(min=self.eps).pow(p)).pow(1.0 / p).flatten(1)
+
+
+class SpatialAttentionPool(nn.Module):
+    """Learn a normalized spatial weighting for scene-level classification."""
+
+    def __init__(self, in_dim, reduction=4):
+        super().__init__()
+        hidden = max(in_dim // reduction, 32)
+        self.attention = nn.Sequential(
+            nn.Conv2d(in_dim, hidden, 1, bias=False),
+            nn.BatchNorm2d(hidden),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden, 1, 1),
+        )
+
+    def forward(self, x):
+        attention = self.attention(x).sigmoid()
+        weighted = (x * attention).sum(dim=(2, 3))
+        return weighted / attention.sum(dim=(2, 3)).clamp_min(1e-6)
+
+
+class SceneClassifyHead(nn.Module):
+    """Three-scale scene-classification head from the teammate implementation.
+
+    Each P3/P4/P5 feature is projected independently and pooled through spatial
+    attention plus optional GeM pooling. The concatenated vector is classified by
+    the original three-layer MLP. Attribute names intentionally match the source
+    ``ClassifyHeadV2`` checkpoint contract.
+    """
+
+    task_name = "classification"
+
+    def __init__(self, nc=26, proj_dim=256, hidden_dim=512, dropout=0.3, use_gem=True, ch=()):
+        super().__init__()
+        if len(ch) != 3:
+            raise ValueError(f"SceneClassifyHead requires exactly three P3/P4/P5 inputs, got {len(ch)}.")
+        self.nc = int(nc)
+        self.use_gem = bool(use_gem)
+
+        def project(in_ch):
+            return nn.Sequential(
+                nn.Conv2d(in_ch, proj_dim, 1, bias=False),
+                nn.BatchNorm2d(proj_dim),
+                nn.ReLU(inplace=True),
+            )
+
+        self.proj_p3 = project(ch[0])
+        self.proj_p4 = project(ch[1])
+        self.proj_p5 = project(ch[2])
+        self.attn_p3 = SpatialAttentionPool(proj_dim)
+        self.attn_p4 = SpatialAttentionPool(proj_dim)
+        self.attn_p5 = SpatialAttentionPool(proj_dim)
+        self.gem_p3 = GeMPool() if self.use_gem else None
+        self.gem_p4 = GeMPool() if self.use_gem else None
+        self.gem_p5 = GeMPool() if self.use_gem else None
+
+        per_scale_dim = proj_dim * (2 if self.use_gem else 1)
+        fusion_dim = per_scale_dim * 3
+        self.classifier = nn.Sequential(
+            nn.Linear(fusion_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.BatchNorm1d(hidden_dim // 2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.7),
+            nn.Linear(hidden_dim // 2, self.nc),
+        )
+
+    @staticmethod
+    def _pool_scale(x, projection, attention, gem):
+        x = projection(x)
+        pooled = [attention(x)]
+        if gem is not None:
+            pooled.append(gem(x))
+        return torch.cat(pooled, dim=1)
+
+    def forward(self, features):
+        p3, p4, p5 = features
+        f3 = self._pool_scale(p3, self.proj_p3, self.attn_p3, self.gem_p3)
+        f4 = self._pool_scale(p4, self.proj_p4, self.attn_p4, self.gem_p4)
+        f5 = self._pool_scale(p5, self.proj_p5, self.attn_p5, self.gem_p5)
+        return self.classifier(torch.cat((f3, f4, f5), dim=1))
 
 
 class Segment(Detect):

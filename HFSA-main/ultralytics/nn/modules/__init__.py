@@ -75,7 +75,20 @@ from .conv import (
     RepConv,
     SpatialAttention,
 )
-from .head import CountingDetect, OBB, Classify, Detect, Pose, RTDETRDecoder, Segment, SemanticSegment, TextPromptSegment, WorldDetect, v10Detect
+from .head import (
+    CountingDetect,
+    OBB,
+    Classify,
+    Detect,
+    Pose,
+    RTDETRDecoder,
+    SceneClassifyHead,
+    Segment,
+    SemanticSegment,
+    TextPromptSegment,
+    WorldDetect,
+    v10Detect,
+)
 from .transformer import (
     AIFI,
     MLP,
@@ -130,6 +143,7 @@ __all__ = (
     "Proto",
     "Detect",
     "CountingDetect",
+    "SceneClassifyHead",
     "Segment",
     "SemanticSegment",
     "TextPromptSegment",

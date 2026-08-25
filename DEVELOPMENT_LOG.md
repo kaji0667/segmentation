@@ -961,3 +961,13 @@ Verification:
 Limitations:
 - No VRSBench dataset or teammate-trained counting checkpoint is bundled, so no real-image training or counting inference smoke was run.
 - GPU tests were intentionally not started because the user had an active experiment; all regression tests forced CPU visibility.
+# 2026-08-25 cleaned YOLOv12m 正式结果与场景分类整合
+
+- 完成 `runs/semseg/srp_yolov12m_axis_clean_empty`：epoch 39 早停，raw-best epoch 31、阈值 0.80，3,480 条 test 得到 oIoU 0.693618、mIoU 0.539086、Pr@0.5-0.9 0.598563/0.520690/0.410920/0.299713/0.154885。
+- 完成旧 epoch-44 checkpoint 的 cleaned-test 公平复评：oIoU 0.702938、mIoU 0.552721，五档 Pr 及 Precision/Recall/F1 均高于新训练。决定保留数据清洗，不发布新权重。
+- 将 checkpoint 原子保存、重试、optimizer/scheduler/early-stop/RNG 完整恢复和协议一致性检查从临时 `train_semseg_resume.py` 同步回活动 `train_semseg.py`，与发布副本哈希一致。
+- 审计活动副本计数任务：`CountingDetect`、`counting/`、训练/测试 Python 与 Shell 脚本、专项测试均存在；核心任务文件与发布副本一致。
+- 导入 `changjingfenlei` commit `688c2a9`，阅读多尺度分类 Head、NWPU/VRSBench 数据、训练、推理、评测与 benchmark。新增 `SceneClassifyHead`、m-scale YAML、`classification/` 类化模块及训练/测试/数据准备入口。
+- 验证：Python/Shell 语法通过；5 项分类专项测试通过；源 `scene_vrsbench_best.pth` Head strict load 无 missing/unexpected；6 项计数专项测试通过；CPU 全模型 forward 输出 `(2,3)`。
+- 分类 CPU smoke：从现有 VRSBench 生成 21 类、每类 2 张硬链接样本；batch 2、imgsz 64、1 train/1 val batch 成功，随后 1 test batch 成功并生成 `runs/smoke/classification_eval/test_results.json`。smoke 指标不用于效果结论。
+- GPU 当前被其他桌面/WSL 进程占用约 3.1 GB，未启动新的 GPU smoke 或长周期训练。

@@ -2,6 +2,15 @@
 
 最后更新：2026-08-25
 
+## 2026-08-25 最新状态：cleaned YOLOv12m 完成与场景分类接入
+
+- `srp_yolov12m_axis_clean_empty` 已在 epoch 39 早停，raw-best epoch 31、阈值 `0.80`；完整 cleaned test 为 `oIoU=0.693618`、`mIoU=0.539086`。
+- 旧 epoch-44 checkpoint 在相同 3,480 条 cleaned test 的公平复评为 `oIoU=0.702938`、`mIoU=0.552721`，且五档 Pr、Precision、Recall、F1 全部高于新训练。因此保留空 mask 清洗规则，但不替换当前发布 checkpoint。
+- checkpoint 文件锁恢复能力已同步回活动副本 canonical `train_semseg.py`；活动副本与发布副本的分割恢复逻辑一致。
+- 目标计数的 `CountingDetect`、任务包、训练/测试入口和脚本已确认存在于活动副本，不再只存在于发布副本。
+- 已从 `zhuoletian-collab/changjingfenlei@688c2a9` 导入场景分类参考源码并接入 `SceneClassifyHead`、m-scale YAML、类化数据/配置/训练/推理/评测和独立脚本。
+- 场景分类 5 项专项测试、源 checkpoint strict 兼容检查及 1-train/1-val/1-test CPU smoke 通过；真实完整场景分类训练尚未执行，GPU smoke 因 GPU 未空闲未启动。
+
 ## 当前主线
 
 - 当前个人负责的任务是 RRSIS-D 文本引导单目标二值分割：输入遥感图像与自由文本描述，输出对应目标的 `[B,1,H,W]` mask。

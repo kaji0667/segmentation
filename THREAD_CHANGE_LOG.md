@@ -222,3 +222,11 @@
 - 计数评测继续采用 positive-query VOC 协议，只测试 XML 中存在的类别，并在 JSON 报告中明确记录，暂不扩展零计数查询。
 - 6 项计数定向测试、脚本语法/参数展开、预训练静态加载通过；发布仓库全量 39 项 CPU 测试通过。由于用户正在运行实验，本次未启动 GPU smoke。
 - 队友仓库缺少训练 checkpoint 和随仓库数据，真实 VRSBench 训练/测试 smoke 等拿到相应路径和权重后再执行。
+# 2026-08-25 cleaned 实验收尾与场景分类任务接入
+
+- `runs/semseg/srp_yolov12m_axis_clean_empty/test_results.json` 已完成；新训练不如 `srp_yolov12m_axis_clean_eval/test_results.json` 的 cleaned-test 公平基线，不替换发布 checkpoint。
+- 活动 `HFSA-main/train_semseg.py` 已同步发布版可靠 resume 实现；临时恢复入口不再是唯一可恢复脚本。
+- 活动副本已确认包含完整 CountingDetect 计数实现。
+- 新增 `SceneClassifyHead`、`yolov12-classification.yaml`、`classification/`、`prepare_classification_data.py`、`train_classification.py`、`test_classification.py`、两个 Shell 脚本和分类专项测试。
+- 场景分类参考来源固定为 `zhuoletian-collab/changjingfenlei@688c2a9`；发布时只带可审计源码和 provenance，不带嵌套 Git、checkpoint、数据、runs、缓存或个人配置。
+- 分类 CPU 最小训练/测试 smoke 已通过；真实完整训练和 GPU smoke 未执行。

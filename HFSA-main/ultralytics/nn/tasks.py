@@ -61,6 +61,7 @@ from ultralytics.nn.modules import (
     ResNetLayer,
     RTDETRDecoder,
     SCDown,
+    SceneClassifyHead,
     Segment,
     SemanticSegment,
     TextPromptSegment,
@@ -1104,8 +1105,10 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in {Detect, CountingDetect, WorldDetect, Segment, SemanticSegment, TextPromptSegment, Pose, OBB, ImagePoolingAttn, v10Detect}:
+        elif m in {Detect, CountingDetect, WorldDetect, Segment, SemanticSegment, TextPromptSegment, SceneClassifyHead, Pose, OBB, ImagePoolingAttn, v10Detect}:
             args.append([ch[x] for x in f])
+            if m is SceneClassifyHead:
+                c2 = args[0]
             if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
             if m in {Detect, CountingDetect, Segment, Pose, OBB}:
@@ -1186,7 +1189,7 @@ def guess_model_task(model):
     def cfg2task(cfg):
         """Guess from YAML dictionary."""
         m = cfg["head"][-1][-2].lower()  # output module name
-        if m in {"classify", "classifier", "cls", "fc"}:
+        if m in {"classify", "sceneclassifyhead", "classifier", "cls", "fc"}:
             return "classify"
         if "detect" in m:
             return "detect"
@@ -1212,7 +1215,7 @@ def guess_model_task(model):
         for m in model.modules():
             if isinstance(m, Segment):
                 return "segment"
-            elif isinstance(m, Classify):
+            elif isinstance(m, (Classify, SceneClassifyHead)):
                 return "classify"
             elif isinstance(m, Pose):
                 return "pose"

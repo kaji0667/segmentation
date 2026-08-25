@@ -210,3 +210,10 @@ The task-specific class boundary is:
 `scripts/train_counting.sh` and `scripts/test_counting.sh` follow the same project-relative, environment-overridable task-script contract as the referring-segmentation scripts. The imported teammate repository remains an isolated provenance snapshot and is not a runtime dependency.
 
 The current evaluator intentionally preserves the teammate's positive-query VOC protocol: only classes present in each XML are queried. Zero-count class queries are not included, so these reports must not be presented as a complete counting-QA protocol. No full VRSBench smoke or trained-checkpoint evaluation has been completed because neither the dataset nor teammate checkpoint is bundled. See ADR-0021.
+# 2026-08-25 场景分类任务接入
+
+- 场景分类继续复用统一 YOLOv12m Backbone/Neck 的 P3/P4/P5，不修改共享特征网络。
+- 最终 Head 为 `SceneClassifyHead`：每个尺度独立 `1x1 Conv + BN + ReLU` 投影，同时执行可学习空间注意力池化和 GeM，拼接三尺度结果后进入三层 MLP，输出 `[B, num_classes]` logits。
+- `ultralytics/cfg/models/v12/yolov12-classification.yaml` 定义共享 Backbone/Neck 与独立分类 Head；`parse_model()` 注入三尺度通道，`guess_model_task()` 识别为 `classify`。
+- `classification/` 按职责拆分配置、ImageFolder 数据、VRSBench 单场景筛选、模型、指标、训练、评测和推理。分类 checkpoint 保存 Head 状态、类别顺序、模型 YAML、预训练匹配报告和配置；Backbone/Neck 继续从团队 `yolov12m.pt` 加载并冻结。
+- 分类、计数和指代分割保持独立 Trainer、Loss、数据与评测协议；本次未修改 OpenCLIP、`TextPromptSegment` 或现有分割/计数训练链路。

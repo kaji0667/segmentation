@@ -1,6 +1,6 @@
-# HFSA Text-Guided Segmentation
+# HFSA Remote-Sensing Multi-Task Heads
 
-This repository contains the code needed for the HFSA text-guided remote-sensing segmentation experiments.
+This repository contains the HFSA task-specific referring-segmentation, object-counting, and scene-classification heads and entry points built on the shared YOLOv12m feature network.
 
 ## Included
 
@@ -13,6 +13,9 @@ This repository contains the code needed for the HFSA text-guided remote-sensing
 - `HFSA-main/run_semseg_preset.sh`: reusable training presets.
 - `HFSA-main/scripts/train_refseg.sh`: project-relative YOLOv12m training entry for the referring-segmentation task.
 - `HFSA-main/scripts/test_refseg.sh`: evaluation-only entry for an existing referring-segmentation checkpoint.
+- `HFSA-main/counting/`, `train_counting.py`, and `test_counting.py`: text-guided detection-based object counting.
+- `HFSA-main/classification/`, `train_classification.py`, and `test_classification.py`: multi-scale single-label scene classification.
+- `HFSA-main/scene_classification_reference/`: selected auditable upstream source files; weights, nested Git metadata, data, runs, caches, and personal configuration are excluded.
 - Project notes: `CURRENT_STATE.md`, `ARCHITECTURE.md`, `DEVELOPMENT_LOG.md`, `THREAD_CHANGE_LOG.md`, `PROJECT_RULES.md`, `LITERATURE_READING_GUIDE.md`.
 
 ## Excluded
@@ -29,6 +32,8 @@ Large or machine-local artifacts are intentionally not tracked:
 
 - `HFSA-main/ultralytics/nn/modules/head.py`
   - `TextPromptSegment` is the current text-conditioned segmentation head.
+  - `CountingDetect` preserves the detection tensor/Loss contract for counting.
+  - `SceneClassifyHead` preserves the teammate P3/P4/P5 spatial-attention + GeM classification architecture.
 - `HFSA-main/ultralytics/cfg/models/v12/yolov12-semseg.yaml`
   - non-P2 baseline model wiring.
 - `HFSA-main/ultralytics/cfg/models/v12/yolov12-semseg-p2.yaml`
@@ -52,6 +57,20 @@ bash HFSA-main/scripts/test_refseg.sh
 ```
 
 The second command evaluates `runs/semseg/srp_yolov12m_axis/weights/best_raw.pt` by default and writes to the separate `runs/semseg/srp_yolov12m_axis_eval` directory without retraining. See `HFSA-main/scripts/README.md` for environment-variable overrides.
+
+The empty-mask-cleaned retraining run did not outperform that checkpoint on the same 3,480-sample cleaned test (`0.693618/0.539086` versus `0.702938/0.552721` oIoU/mIoU), so the epoch-44 checkpoint remains the release choice while `empty-mask-policy=drop` remains the data default.
+
+Task-specific counting and scene-classification wrappers are also available:
+
+```bash
+bash HFSA-main/scripts/train_counting.sh
+bash HFSA-main/scripts/test_counting.sh
+python HFSA-main/prepare_classification_data.py --voc-root HFSA-main/data/VRSBench --output-dir HFSA-main/data/VRSBench_scene
+bash HFSA-main/scripts/train_classification.sh
+bash HFSA-main/scripts/test_classification.sh
+```
+
+Scene classification uses the unchanged YOLOv12m Backbone/Neck with an independent P3/P4/P5 Head. The released integration has passed a minimal CPU chain smoke only; no complete scene-classification result is claimed.
 
 To evaluate the best validation checkpoint on the official test split with the validation-selected threshold frozen:
 
