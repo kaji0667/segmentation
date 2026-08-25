@@ -1,22 +1,23 @@
 # CURRENT_STATE.md
 
-最后更新：2026-08-25
+最后更新：2026-08-26
 
-## 2026-08-25 最新状态：cleaned YOLOv12m 完成与场景分类接入
+## 2026-08-26 最新状态：场景分类接入复核完成
 
 - `srp_yolov12m_axis_clean_empty` 已在 epoch 39 早停，raw-best epoch 31、阈值 `0.80`；完整 cleaned test 为 `oIoU=0.693618`、`mIoU=0.539086`。
 - 旧 epoch-44 checkpoint 在相同 3,480 条 cleaned test 的公平复评为 `oIoU=0.702938`、`mIoU=0.552721`，且五档 Pr、Precision、Recall、F1 全部高于新训练。因此保留空 mask 清洗规则，但不替换当前发布 checkpoint。
 - checkpoint 文件锁恢复能力已同步回活动副本 canonical `train_semseg.py`；活动副本与发布副本的分割恢复逻辑一致。
 - 目标计数的 `CountingDetect`、任务包、训练/测试入口和脚本已确认存在于活动副本，不再只存在于发布副本。
 - 已从 `zhuoletian-collab/changjingfenlei@688c2a9` 导入场景分类参考源码并接入 `SceneClassifyHead`、m-scale YAML、类化数据/配置/训练/推理/评测和独立脚本。
-- 场景分类 5 项专项测试、源 checkpoint strict 兼容检查及 1-train/1-val/1-test CPU smoke 通过；真实完整场景分类训练尚未执行，GPU smoke 因 GPU 未空闲未启动。
+- 场景分类已完成独立复核：单图推理不再依赖数据集目录，`--split all` 可正确合并显式 train/val/test，训练 DataLoader 不会向含 `BatchNorm1d` 的 Head 送入末尾单样本 batch。
+- 场景分类 7 项专项测试、源 checkpoint strict 兼容检查、单图 Top-K CLI、1-train/1-val/1-test CPU smoke 均通过；活动副本与发布仓库完整 CPU 回归均为 46 项通过。真实完整场景分类训练尚未执行，GPU smoke 因 GPU 仍有其他负载未启动。
 
 ## 当前主线
 
 - 当前个人负责的任务是 RRSIS-D 文本引导单目标二值分割：输入遥感图像与自由文本描述，输出对应目标的 `[B,1,H,W]` mask。
 - 团队已确认多任务共用 YOLOv12m Backbone 和 Neck；当前分割分支使用匹配的 `yolov12m-semseg.yaml`、`yolov12m.pt`、P3/P4/P5 和 ADR-0015 `TextPromptSegment` 语义角色 token pooling Head。
 - 未经用户确认，不修改 Backbone、Neck、OpenCLIP 或其他成员任务实现。
-- 当前发布代码基线为 `e42b12e`，包含空 mask 清洗与 checkpoint 恢复；工作副本的计数新增文件已与发布副本同步，但工作副本 `train_semseg.py` 仍缺少发布提交中的恢复函数，待当前实验结束后再单独同步。
+- 当前发布代码已包含空 mask 清洗与 checkpoint 恢复、目标计数和场景分类接入；活动副本的 canonical `train_semseg.py`、计数/分类实现和完整测试集合均已与发布副本同步。
 
 ## 已完成的分割任务封装
 
@@ -36,8 +37,8 @@
 
 - 历史 YOLOv12m 完整运行：`runs/semseg/srp_yolov12m_axis`，raw-best epoch 44，冻结阈值 `0.70`，旧 3481-sample test 上 `oIoU=0.701171`、`mIoU=0.552562`、`Pr@0.5-0.9=0.623959/0.540362/0.425452/0.319161/0.164321`。
 - 该结果早于空 mask 清洗，只作为历史基线；不能直接与 cleaned 3480-sample test 的新结果比较。
-- cleaned 协议已经通过 batch-4、2-train/2-val/2-test CUDA smoke，输出目录为 `runs/semseg/srp_yolov12m_clean_empty_smoke`。
-- cleaned 协议的完整 seed-42 训练尚未在文档中记录完成结果；正式目录计划为 `runs/semseg/srp_yolov12m_axis_clean_empty`。
+- cleaned 协议完整 seed-42 训练位于 `runs/semseg/srp_yolov12m_axis_clean_empty`：epoch 39 早停，raw-best epoch 31、阈值 `0.80`，3,480 条 test 上 `oIoU=0.693618`、`mIoU=0.539086`。
+- 旧 epoch-44 checkpoint 在相同 cleaned test 上为 `oIoU=0.702938`、`mIoU=0.552721`，因此数据清洗规则保留，但新训练 checkpoint 不替换当前发布候选。
 
 ## 多任务训练整合结论
 
@@ -53,18 +54,19 @@
 - 计数仍采用原有“文本引导类无关检测 -> NMS -> 检测框数”逻辑，不引入密度图、计数回归 Head 或新 Loss；共享 YOLOv12m Backbone/Neck、OpenCLIP 和文本引导检测 Trainer。
 - 计数评测当前明确保持队友的 positive-query VOC 协议，只查询 XML 中实际存在的类别，报告 EM、MAE、RMSE 与逐类别统计；不得把它表述为包含零计数问答的完整协议。
 - 队友仓库未提供训练 checkpoint，本地也未完成 VRSBench 真实数据 smoke；当前验证范围为语法、参数展开、Head 等价性、模型构建和预训练权重静态加载。
+- 队友场景分类已接入 `SceneClassifyHead`、m-scale YAML、类化配置/数据/训练/推理/评测、数据准备工具及独立 Python/Shell 入口；算法继续使用 P3/P4/P5 空间注意力 + GeM 和冻结 Backbone/Neck。
+- 场景分类已完成 CPU 链路 smoke 与 checkpoint 严格重载，但尚未完成真实完整数据训练和空闲 GPU smoke；smoke 指标仅用于验证链路。
 
 ## 下一步
 
-1. 在 A5000 上完成 cleaned 协议的 YOLOv12m 正式训练与完整 test，并记录参数量、checkpoint 大小、显存、训练耗时和推理速度。
-2. 使用旧 YOLOv12m raw-best checkpoint 在相同的 3480-sample cleaned test 上复评，再与新训练结果比较，分离数据清洗与重新训练的影响。
-3. 获取计数队友的 VRSBench 数据路径和训练 checkpoint，运行最小训练 smoke 与 1-2 张图的独立计数评测，确认 checkpoint 严格加载和真实 EM/MAE/RMSE 输出。
-4. 继续收集分类等其他任务的 YAML、Head、Loss、数据和 checkpoint；每个任务先建立独立脚本并通过 smoke，再实现可选薄分发器。
-5. 所有任务稳定后，再设计统一推理入口和 A5000 同条件资源测评；当前不要提前合并为联合多数据集训练。
+1. 获取计数队友的 VRSBench 数据路径和训练 checkpoint，运行最小训练 smoke 与 1-2 张图的独立计数评测，确认 checkpoint 严格加载和真实 EM/MAE/RMSE 输出。
+2. 使用真实场景分类数据运行完整训练与独立 test；GPU 空闲时先执行最小 CUDA smoke，并记录参数、显存、耗时和 checkpoint 大小。
+3. 所有任务稳定后，再设计统一推理入口和 A5000 同条件资源测评；当前不要提前合并为联合多数据集训练。
 
 ## 部署注意
 
 - 分割训练包不需要携带 `run_semseg_preset.sh`；`scripts/train_refseg.sh` 已包含所需正式参数。
 - 运行前仍需提供项目源码、RRSIS-D 数据与缓存、`pretrain_model/yolov12m.pt`，并激活具备 PyTorch、OpenCLIP、OpenCV 等依赖的环境。
 - 计数训练还需提供 VOC 风格 VRSBench 数据；独立测试需提供计数 `best.pt`，默认路径均可通过脚本环境变量覆盖。
+- 场景分类训练需要 ImageFolder 或通过 `prepare_classification_data.py` 从 VOC VRSBench 生成的数据、`pretrain_model/yolov12m.pt`；独立测试需要分类 Head checkpoint。单图 `--image` 推理不要求数据集目录存在。
 - 默认训练输出目录已有历史结果时，应通过 `SAVE_DIR` 指定新目录，避免覆盖旧实验。

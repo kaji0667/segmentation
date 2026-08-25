@@ -1,14 +1,17 @@
 import sys
 from pathlib import Path
+import tempfile
 import unittest
 
 import torch
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from classification.metrics import SceneClassificationMetrics
+from classification.data import SceneDataModule
 from classification.prepare import VRSBenchSceneDatasetBuilder
 from ultralytics.nn.modules import SceneClassifyHead
 from ultralytics.nn.tasks import ClassificationModel, guess_model_task
@@ -64,6 +67,22 @@ class SceneClassificationIntegrationTest(unittest.TestCase):
         self.assertEqual(select(["ship", "harbor", "harbor"]), "harbor")
         self.assertIsNone(select(["ship", "vehicle"]))
         self.assertIsNone(select(["bridge", "harbor"]))
+
+    def test_eval_transform_does_not_require_a_dataset_directory(self):
+        transform = SceneDataModule.build_transform(32, train=False)
+        tensor = transform(Image.new("RGB", (12, 10), color=(128, 64, 32)))
+        self.assertEqual(tuple(tensor.shape), (3, 32, 32))
+
+    def test_all_eval_combines_explicit_splits(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for split in ("train", "val", "test"):
+                class_dir = root / split / "airport"
+                class_dir.mkdir(parents=True)
+                Image.new("RGB", (8, 8), color=(20, 40, 60)).save(class_dir / f"{split}.jpg")
+            loader, classes = SceneDataModule(root, imgsz=16, batch=2, workers=0).build_eval("all")
+            self.assertEqual(classes, ["airport"])
+            self.assertEqual(len(loader.dataset), 3)
 
 
 if __name__ == "__main__":

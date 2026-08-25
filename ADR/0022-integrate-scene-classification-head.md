@@ -29,6 +29,8 @@ Accepted；代码与最小 smoke 已验证，真实完整训练尚未执行。
 - m-scale 21 类模型约 `19.50M` 参数，其中分类 Head 约 `1.30M` 参数可训练。
 - 真实 VRSBench 数据准备仍按“恰好一个场景类”筛选；多场景图和纯物体图被排除并写入审计报告。
 - CPU 最小 smoke 使用 21 类、每类 2 张硬链接样本、batch 2、imgsz 64、1 train/1 val batch，成功生成并重新加载 checkpoint；该 smoke 只验证链路，不代表模型效果。
+- 单图 Top-K 推理只需图像、checkpoint 和团队预训练权重，不强制存在 ImageFolder；显式 train/val/test 的 `all` 评测合并 split 并验证类别顺序。
+- 原 Head 含 `BatchNorm1d`，因此训练 batch 必须至少为 2；当训练集长度会产生末尾单样本 batch 时，DataLoader 丢弃该末尾 batch，避免运行期 BatchNorm 错误而不改变 Head 计算和 checkpoint 参数契约。
 
 ## 关联
 

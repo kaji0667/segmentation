@@ -79,4 +79,14 @@ DATA_DIR=data/NWPU-RESISC45 EPOCHS=35 BATCH=32 bash scripts/train_classification
 CHECKPOINT=runs/classification/other/weights/best.pt SPLIT=test bash scripts/test_classification.sh
 ```
 
+单图 Top-K 推理不依赖数据集目录：
+
+```bash
+python test_classification.py \
+  --checkpoint runs/classification/other/weights/best.pt \
+  --image path/to/image.jpg
+```
+
+`--split all` 支持平铺 ImageFolder，也支持显式 `train/val/test` 布局；显式布局会合并各 split 并检查类别顺序一致。
+
 该任务保留队友代码的 P3/P4/P5 多尺度空间注意力 + GeM、类别平衡采样、CrossEntropy 和 warmup/cosine 训练流程。当前只完成最小 CPU smoke，不代表完整数据效果。

@@ -971,3 +971,17 @@ Limitations:
 - 验证：Python/Shell 语法通过；5 项分类专项测试通过；源 `scene_vrsbench_best.pth` Head strict load 无 missing/unexpected；6 项计数专项测试通过；CPU 全模型 forward 输出 `(2,3)`。
 - 分类 CPU smoke：从现有 VRSBench 生成 21 类、每类 2 张硬链接样本；batch 2、imgsz 64、1 train/1 val batch 成功，随后 1 test batch 成功并生成 `runs/smoke/classification_eval/test_results.json`。smoke 指标不用于效果结论。
 - GPU 当前被其他桌面/WSL 进程占用约 3.1 GB，未启动新的 GPU smoke 或长周期训练。
+
+## 2026-08-26: Review and Harden the Integrated Scene-Classification Task
+
+Scope:
+- Independently reviewed the background integration commit against the teammate source Head, VRSBench/NWPU data flow, optimizer/scheduler, checkpoint contract, task YAML, and active HFSA copy.
+- Kept `SceneClassifyHead`, Backbone/Neck freezing, preprocessing, loss, optimizer, scheduler, sampling, and checkpoint parameter names unchanged.
+- Fixed three CLI/data boundaries: single-image inference now builds preprocessing without requiring `data_dir`; `split=all` merges explicit train/val/test folders instead of treating split names as classes; training rejects batch size 1 and drops only a final singleton batch required by the source `BatchNorm1d` Head.
+- Synchronized the missing legacy cosine-resume regression test into the active copy; canonical `train_semseg.py` and all task implementations already matched the publication repository.
+
+Verification:
+- Scene-classification directed tests increased from 5 to 7 and all passed.
+- A real single-image CPU CLI run succeeded while `--data-dir` intentionally pointed to a missing directory and returned Top-3 predictions from the saved smoke checkpoint.
+- Fresh CPU smoke under `runs/smoke/classification_review_20260826`: 21 classes, batch 2, imgsz 64, 1 train/1 val batch; YOLOv12m pretrained loading matched 678 tensors and skipped 121, with 1,304,155 trainable Head parameters and 18,198,080 frozen parameters. The saved checkpoint was strictly reloaded for a 1-test-batch evaluation.
+- Active HFSA full CPU regression passed 46 tests; publication repository full CPU regression passed 46 tests. GPU smoke was not started because another GPU workload remained active.

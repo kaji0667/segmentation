@@ -216,4 +216,5 @@ The current evaluator intentionally preserves the teammate's positive-query VOC 
 - 最终 Head 为 `SceneClassifyHead`：每个尺度独立 `1x1 Conv + BN + ReLU` 投影，同时执行可学习空间注意力池化和 GeM，拼接三尺度结果后进入三层 MLP，输出 `[B, num_classes]` logits。
 - `ultralytics/cfg/models/v12/yolov12-classification.yaml` 定义共享 Backbone/Neck 与独立分类 Head；`parse_model()` 注入三尺度通道，`guess_model_task()` 识别为 `classify`。
 - `classification/` 按职责拆分配置、ImageFolder 数据、VRSBench 单场景筛选、模型、指标、训练、评测和推理。分类 checkpoint 保存 Head 状态、类别顺序、模型 YAML、预训练匹配报告和配置；Backbone/Neck 继续从团队 `yolov12m.pt` 加载并冻结。
+- 推理预处理可通过 `SceneDataModule.build_transform()` 独立构建，因此单图 Top-K 不依赖数据集目录；`split=all` 在显式 train/val/test 布局下合并各 split 并校验类别顺序。训练保持原 Head 的 BatchNorm 结构，并避免产生末尾单样本 batch。
 - 分类、计数和指代分割保持独立 Trainer、Loss、数据与评测协议；本次未修改 OpenCLIP、`TextPromptSegment` 或现有分割/计数训练链路。

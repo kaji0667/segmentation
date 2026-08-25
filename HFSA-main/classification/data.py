@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Sequence, Tuple
 
 import torch
-from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
+from torch.utils.data import ConcatDataset, DataLoader, Subset, WeightedRandomSampler
 from torchvision import datasets, transforms
 
 
@@ -26,8 +26,13 @@ class SceneDataModule:
         if not self.data_dir.is_dir():
             raise FileNotFoundError(f"Scene dataset directory not found: {self.data_dir}")
 
-    def _transform(self, train=False):
-        operations = [transforms.Resize((self.imgsz, self.imgsz))]
+    @classmethod
+    def build_transform(cls, imgsz, train=False):
+        """Build the source-compatible preprocessing without requiring a dataset directory."""
+        imgsz = int(imgsz)
+        if imgsz <= 0:
+            raise ValueError("imgsz must be positive.")
+        operations = [transforms.Resize((imgsz, imgsz))]
         if train:
             operations.extend(
                 [
@@ -39,10 +44,13 @@ class SceneDataModule:
         operations.extend(
             [
                 transforms.ToTensor(),
-                transforms.Normalize(mean=self.NORMALIZE_MEAN, std=self.NORMALIZE_STD),
+                transforms.Normalize(mean=cls.NORMALIZE_MEAN, std=cls.NORMALIZE_STD),
             ]
         )
         return transforms.Compose(operations)
+
+    def _transform(self, train=False):
+        return self.build_transform(self.imgsz, train=train)
 
     @staticmethod
     def _image_folder(root, transform):
@@ -76,6 +84,8 @@ class SceneDataModule:
         return WeightedRandomSampler(sample_weights, len(sample_weights), replacement=True)
 
     def build_train_val(self):
+        if self.batch < 2:
+            raise ValueError("Training batch must be at least 2 because SceneClassifyHead uses BatchNorm1d.")
         train_root = self.data_dir / "train"
         val_root = self.data_dir / "val"
         pin_memory = torch.cuda.is_available()
@@ -104,6 +114,9 @@ class SceneDataModule:
             val_set = Subset(val_full, val_indices)
             classes = train_full.classes
 
+        if len(train_set) < 2:
+            raise ValueError("Scene classification requires at least two training samples.")
+        drop_last = len(train_set) % self.batch == 1
         train_loader = DataLoader(
             train_set,
             batch_size=self.batch,
@@ -111,6 +124,7 @@ class SceneDataModule:
             shuffle=sampler is None,
             num_workers=self.workers,
             pin_memory=pin_memory,
+            drop_last=drop_last,
         )
         val_loader = DataLoader(
             val_set,
@@ -124,19 +138,30 @@ class SceneDataModule:
     def build_eval(self, split="val"):
         split = str(split).lower()
         explicit_root = self.data_dir / split
-        if explicit_root.is_dir():
+        classes = None
+        if split == "all":
+            split_roots = [self.data_dir / name for name in ("train", "val", "test")]
+            split_roots = [root for root in split_roots if root.is_dir()]
+            if split_roots:
+                split_datasets = [self._image_folder(root, self._transform(train=False)) for root in split_roots]
+                classes = list(split_datasets[0].classes)
+                if any(dataset.classes != classes for dataset in split_datasets[1:]):
+                    raise ValueError("Explicit scene dataset splits do not share the same class folders.")
+                dataset = ConcatDataset(split_datasets)
+            else:
+                dataset = self._image_folder(self.data_dir, self._transform(train=False))
+        elif explicit_root.is_dir():
             dataset = self._image_folder(explicit_root, self._transform(train=False))
         else:
             full = self._image_folder(self.data_dir, self._transform(train=False))
-            if split == "all":
-                dataset = full
-            elif split in {"train", "val"}:
+            if split in {"train", "val"}:
                 train_indices, val_indices = self._stratified_indices(full.targets, len(full.classes))
                 dataset = Subset(full, train_indices if split == "train" else val_indices)
                 dataset.classes = full.classes
             else:
                 raise FileNotFoundError(f"No explicit '{split}' directory under {self.data_dir}.")
-        classes = list(dataset.dataset.classes if isinstance(dataset, Subset) else dataset.classes)
+        if classes is None:
+            classes = list(dataset.dataset.classes if isinstance(dataset, Subset) else dataset.classes)
         loader = DataLoader(
             dataset,
             batch_size=self.batch,

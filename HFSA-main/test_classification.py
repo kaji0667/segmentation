@@ -57,6 +57,13 @@ class SceneClassificationEvaluationApplication:
         )
         network = SceneClassificationNetwork(model_yaml, len(classes), self.args.weights, self.args.device)
         network.load_head_checkpoint(checkpoint_path, strict=True)
+        if self.args.image:
+            transform = SceneDataModule.build_transform(self.args.imgsz, train=False)
+            predictor = SceneClassificationPredictor(network, transform, classes, self.args.device)
+            for item in predictor.predict(self.args.image, topk=self.args.topk):
+                print(f"{item['class_name']}: {item['probability']:.6f}")
+            return
+
         data = SceneDataModule(
             self.args.data_dir,
             imgsz=self.args.imgsz,
@@ -66,12 +73,6 @@ class SceneClassificationEvaluationApplication:
             seed=self.args.seed,
             sampling="none",
         )
-        if self.args.image:
-            predictor = SceneClassificationPredictor(network, data._transform(train=False), classes, self.args.device)
-            for item in predictor.predict(self.args.image, topk=self.args.topk):
-                print(f"{item['class_name']}: {item['probability']:.6f}")
-            return
-
         loader, dataset_classes = data.build_eval(self.args.split)
         if dataset_classes != classes:
             raise ValueError("Checkpoint class order does not match the evaluation ImageFolder class order.")

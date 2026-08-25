@@ -230,3 +230,11 @@
 - 新增 `SceneClassifyHead`、`yolov12-classification.yaml`、`classification/`、`prepare_classification_data.py`、`train_classification.py`、`test_classification.py`、两个 Shell 脚本和分类专项测试。
 - 场景分类参考来源固定为 `zhuoletian-collab/changjingfenlei@688c2a9`；发布时只带可审计源码和 provenance，不带嵌套 Git、checkpoint、数据、runs、缓存或个人配置。
 - 分类 CPU 最小训练/测试 smoke 已通过；真实完整训练和 GPU smoke 未执行。
+
+### 32. 场景分类整合复核与活动副本最终同步
+
+- 独立复核 `SceneClassifyHead`、m-scale YAML、冻结权重加载、ImageFolder/VRSBench 数据、训练、评测和 checkpoint 契约，确认保持队友 P3/P4/P5 空间注意力 + GeM 主逻辑。
+- 修复单图推理对数据集目录的无关依赖，修复显式 split 布局下 `--split all` 的类别误判，并避免 `BatchNorm1d` 接收末尾单样本训练 batch。
+- 活动副本补齐发布仓库已有的 legacy cosine scheduler 恢复测试；`train_semseg.py`、计数、分类核心实现和测试集合均已同步。
+- 分类 7 项定向测试、缺失数据目录条件下的单图 Top-K、全新 1-train/1-val/1-test CPU smoke 均通过；活动与发布副本完整 CPU 回归均为 46 项通过。
+- GPU 仍有其他负载，本轮未启动 CUDA smoke 或完整场景分类训练；真实训练仍是后续事项。
