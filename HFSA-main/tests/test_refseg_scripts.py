@@ -36,6 +36,7 @@ class RefSegScriptsTest(unittest.TestCase):
         self.assertIn('exec "$PYTHON_BIN" train_semseg.py', text)
         self.assertIn("--val-select-metric miou", text)
         self.assertIn("--freeze-backbone", text)
+        self.assertIn('--empty-mask-policy "${EMPTY_MASK_POLICY:-drop}"', text)
 
     def test_checkpoint_can_be_resolved_relative_to_project_root(self):
         checkpoint = PROJECT_ROOT / "tests" / "_checkpoint_path_test.pt"

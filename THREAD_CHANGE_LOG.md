@@ -197,3 +197,11 @@
 - `train_semseg.py` 新增 `--eval-only --checkpoint`：只构建 test split，严格加载完整 checkpoint，并复用其中保存的验证阈值。
 - 两个脚本都通过脚本自身位置定位 `HFSA-main`，数据、模型、权重和输出全部使用项目相对路径，无本机盘符或 `/mnt` 硬编码。
 - 两份代码均通过 Shell 语法检查、Python 编译、25 项全库测试；训练脚本的有/无训练后测试两种参数展开均通过，2-batch CUDA 只评测 smoke 成功。
+
+### 28. RRSIS-D 空标注清洗与增强审计
+
+- 全量审计 17,402 条表达，未发现重复 ID、空文本、非法类别或方向词漏拦截；发现 train 两条、test 一条 RLE 解码后前景面积为零。
+- 默认 `--empty-mask-policy drop` 后 split 为 `12179/1740/3480`；`error` 用于严格审计，`keep` 用于复现旧协议。空 mask 不使用 bbox 补伪标签。
+- 最近邻缩放到 512 未使任何非空 mask 消失，因此保留现有 mask resize；axis-aware 翻转和 `0.15` 色彩扰动不变，只新增参数范围校验。
+- 数据准备不再把空文本静默替换为类别名，类别字段优先标准 `category_id` 并兼容旧 `categories_id`。
+- 29 项测试和 YOLOv12m batch-4 的 2-train/2-val/2-test CUDA smoke 已通过；正式运行目录定为 `runs/semseg/srp_yolov12m_axis_clean_empty`。

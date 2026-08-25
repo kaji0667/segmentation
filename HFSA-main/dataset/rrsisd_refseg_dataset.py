@@ -4,6 +4,7 @@ import argparse
 import json
 import pickle
 import re
+import warnings
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -154,10 +155,19 @@ def collect_rrsisd_rows(root: str | Path, split: str) -> Tuple[List[Dict[str, An
             missing.append(str(image_path))
             continue
 
-        class_idx = int(ref.get("category_id", ann.get("categories_id", 0)))
+        category_id = ref.get("category_id")
+        if category_id is None:
+            category_id = ann.get("category_id", ann.get("categories_id"))
+        if category_id is None:
+            raise ValueError(f"Missing category_id for RRSIS-D ann_id={ann_id}, ref_id={ref.get('ref_id', ann_id)}")
+        class_idx = int(category_id)
+        if not 0 <= class_idx < len(names):
+            raise ValueError(
+                f"Invalid category_id={class_idx} for RRSIS-D ann_id={ann_id}; expected 0 <= id < {len(names)}"
+            )
         text = _first_sentence(ref)
         if not text:
-            text = names[class_idx] if 0 <= class_idx < len(names) else str(class_idx)
+            raise ValueError(f"Missing referring expression for RRSIS-D ann_id={ann_id}, ref_id={ref.get('ref_id', ann_id)}")
 
         rows.append(
             {
@@ -184,6 +194,7 @@ def collect_rrsisd_rows(root: str | Path, split: str) -> Tuple[List[Dict[str, An
     if missing:
         preview = ", ".join(missing[:5])
         raise FileNotFoundError(f"Missing {len(missing)} RRSIS-D item(s) for split {split}. First entries: {preview}")
+    rows, _ = clean_rrsisd_rows(rows, empty_mask_policy="drop", context=f"RRSIS-D {split} preparation")
     return rows, names
 
 
@@ -252,31 +263,39 @@ def decode_compressed_rle_counts(counts: str | Sequence[int]) -> List[int]:
     return decoded
 
 
-def decode_rle_mask(rle: Dict[str, Any]):
-    import numpy as np
-
+def _validated_rle_counts(rle: Dict[str, Any]) -> Tuple[int, int, List[int]]:
     size = rle.get("size", None)
     counts = rle.get("counts", None)
     if not isinstance(size, (list, tuple)) or len(size) != 2:
         raise ValueError(f"RLE size must be [height, width], got {size}")
     height, width = int(size[0]), int(size[1])
+    if height <= 0 or width <= 0:
+        raise ValueError(f"RLE size values must be positive, got {size}")
     decoded_counts = decode_compressed_rle_counts(counts)
+    expected = height * width
+    if any(int(count) < 0 for count in decoded_counts):
+        raise ValueError("RLE counts must be non-negative.")
+    actual = sum(int(count) for count in decoded_counts)
+    if actual != expected:
+        raise ValueError(f"RLE count sum {actual} does not match mask size {expected}.")
+    return height, width, decoded_counts
 
+
+def decode_rle_mask(rle: Dict[str, Any]):
+    import numpy as np
+
+    height, width, decoded_counts = _validated_rle_counts(rle)
     expected = height * width
     flat = np.zeros(expected, dtype=np.uint8)
     index = 0
     value = 0
     for count in decoded_counts:
         count = int(count)
-        if count < 0:
-            raise ValueError(f"RLE count must be non-negative, got {count}")
-        end = min(index + count, expected)
+        end = index + count
         if value == 1 and end > index:
             flat[index:end] = 1
         index += count
         value = 1 - value
-    if index != expected:
-        raise ValueError(f"RLE count sum {index} does not match mask size {expected}.")
     return flat.reshape((height, width), order="F")
 
 
@@ -294,6 +313,71 @@ def decode_segmentation_mask(segmentation: Any):
             merged |= mask.astype(np.uint8)
         return merged
     raise ValueError("Missing or unsupported RRSIS-D segmentation.")
+
+
+def segmentation_foreground_area(segmentation: Any) -> int:
+    """Return exact encoded foreground area without allocating a dense mask."""
+    items = [segmentation] if isinstance(segmentation, dict) else segmentation
+    if not isinstance(items, list) or not items:
+        raise ValueError("Missing or unsupported RRSIS-D segmentation.")
+    rles = [item for item in items if isinstance(item, dict)]
+    if not rles:
+        raise ValueError("RRSIS-D polygon segmentations are not supported in this loader.")
+    foreground = 0
+    for rle in rles:
+        _, _, decoded_counts = _validated_rle_counts(rle)
+        foreground += sum(int(count) for index, count in enumerate(decoded_counts) if index % 2 == 1)
+    return foreground
+
+
+def clean_rrsisd_rows(
+    rows: Sequence[Dict[str, Any]],
+    empty_mask_policy: str = "drop",
+    context: str = "RRSIS-D dataset",
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Validate query metadata and explicitly drop, reject, or retain empty-mask annotations."""
+    policy = str(empty_mask_policy).strip().lower()
+    if policy not in {"drop", "error", "keep"}:
+        raise ValueError(f"empty_mask_policy must be 'drop', 'error', or 'keep', got {empty_mask_policy!r}")
+
+    cleaned: List[Dict[str, Any]] = []
+    dropped_ids: List[str] = []
+    seen_ids = set()
+    for index, row in enumerate(rows):
+        sample_id = str(row.get("id") or "").strip()
+        if not sample_id:
+            raise ValueError(f"Missing sample id in {context} at row {index}")
+        if sample_id in seen_ids:
+            raise ValueError(f"Duplicate sample id {sample_id!r} in {context}")
+        seen_ids.add(sample_id)
+
+        text = row.get("text")
+        if text is None or not str(text).strip():
+            raise ValueError(f"Missing referring expression for sample_id={sample_id} in {context}")
+        try:
+            class_idx = int(row["class_idx"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid class_idx for sample_id={sample_id} in {context}") from exc
+        if class_idx < 0:
+            raise ValueError(f"class_idx must be non-negative for sample_id={sample_id}, got {class_idx}")
+
+        foreground_area = segmentation_foreground_area(row.get("segmentation"))
+        if foreground_area == 0:
+            if policy == "error":
+                raise ValueError(f"Empty segmentation mask for sample_id={sample_id} in {context}")
+            if policy == "drop":
+                dropped_ids.append(sample_id)
+                continue
+        cleaned.append(row)
+
+    if dropped_ids:
+        preview = ", ".join(dropped_ids[:5])
+        warnings.warn(
+            f"Dropped {len(dropped_ids)} empty-mask annotation(s) from {context}: {preview}",
+            UserWarning,
+            stacklevel=2,
+        )
+    return cleaned, dropped_ids
 
 
 def _resolve_existing_path(path: str | Path) -> Path:
@@ -355,16 +439,31 @@ class RRSISDRefSegDataset:
         vflip_prob: float = 0.5,
         color_jitter: float = 0.15,
         directional_flip_policy: str = "axis-aware",
+        empty_mask_policy: str = "drop",
     ) -> None:
-        self.rows = _load_jsonl_rows(rows) if isinstance(rows, (str, Path)) else list(rows)
+        loaded_rows = _load_jsonl_rows(rows) if isinstance(rows, (str, Path)) else list(rows)
+        context = str(rows) if isinstance(rows, (str, Path)) else "in-memory RRSIS-D rows"
+        self.rows, self.dropped_empty_sample_ids = clean_rrsisd_rows(
+            loaded_rows,
+            empty_mask_policy=empty_mask_policy,
+            context=context,
+        )
         self.image_size = int(image_size) if image_size else None
+        if self.image_size is not None and self.image_size <= 0:
+            raise ValueError(f"image_size must be positive, got {image_size}")
         self.normalize = bool(normalize)
         self.text_embeddings = _load_text_embeddings(text_embedding_file) if text_embedding_file else {}
         self.require_text_embedding = bool(text_embedding_file)
         self.augment = bool(augment)
         self.hflip_prob = float(hflip_prob)
         self.vflip_prob = float(vflip_prob)
-        self.color_jitter = max(float(color_jitter), 0.0)
+        self.color_jitter = float(color_jitter)
+        for name, value in (("hflip_prob", self.hflip_prob), ("vflip_prob", self.vflip_prob)):
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be within [0, 1], got {value}")
+        if not 0.0 <= self.color_jitter <= 1.0:
+            raise ValueError(f"color_jitter must be within [0, 1], got {self.color_jitter}")
+        self.empty_mask_policy = str(empty_mask_policy).strip().lower()
         self.directional_flip_policy = str(directional_flip_policy).strip().lower()
         if self.directional_flip_policy not in {"legacy", "axis-aware"}:
             raise ValueError(

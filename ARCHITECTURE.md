@@ -167,3 +167,11 @@ The residual last-layer weight norm was `1.011367`, and the complete test mask c
 `HFSA-main/scripts/train_refseg.sh` is the self-contained task-level training wrapper. It locates `HFSA-main`, changes to that directory, and directly invokes `train_semseg.py` with the accepted baseline parameters: YOLOv12m, RRSIS-D, batch 4, 60 epochs, patience 8, and test-after-train by default. It embeds the required arguments and has no runtime dependency on `run_semseg_preset.sh`; environment variables and trailing CLI arguments may override the defaults.
 
 `HFSA-main/scripts/test_refseg.sh` is the independent evaluation wrapper. It invokes `train_semseg.py --eval-only --checkpoint ...`, builds only the official test dataset/cache/loader, strictly loads the full checkpoint, reuses the checkpoint's stored validation threshold, and writes to a separate evaluation directory. It does not build the train or validation datasets and does not load YOLO pretraining weights. All wrapper paths are repository-relative; no machine-specific drive or `/mnt` path is embedded.
+
+## RRSIS-D Validation and Empty-Mask Cleaning
+
+`RRSISDRefSegDataset` now validates stable sample IDs, non-empty referring expressions, non-negative class indices, RLE dimensions/count sums, and augmentation ranges before training. Encoded foreground area is computed directly from RLE runs, without allocating a dense mask during dataset construction.
+
+The default `empty_mask_policy=drop` explicitly removes zero-foreground annotations and reports their IDs. The audited split changes from `12181/1740/3481` to `12179/1740/3480`, removing `train_22187`, `train_20203`, and `test_413`. `error` supports strict audits and `keep` preserves the historical protocol. Empty masks are not repaired from bbox because that would introduce unsupported rectangular pseudo-labels.
+
+The resize path remains bilinear for images and nearest-neighbor for masks: the full audit found no non-empty mask that became empty at 512, while area-preserving threshold resize could inflate some target areas by up to `1.528x`. Axis-aware flips and color jitter strength `0.15` remain unchanged, so the controlled YOLOv12m experiment changes only the confirmed empty-annotation policy.

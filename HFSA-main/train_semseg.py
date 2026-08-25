@@ -60,6 +60,13 @@ def parse_args() -> argparse.Namespace:
         choices=("legacy", "axis-aware"),
         help="legacy blocks both flips for any position word; axis-aware blocks only the constrained axis.",
     )
+    parser.add_argument(
+        "--empty-mask-policy",
+        type=str,
+        default="drop",
+        choices=("drop", "error", "keep"),
+        help="How to handle decoded RRSIS-D annotations with zero foreground; drop is the cleaned default.",
+    )
     parser.add_argument("--val-thresholds", type=str, default="0.5", help="Comma-separated sigmoid thresholds to scan during binary validation.")
     parser.add_argument(
         "--val-select-metric",
@@ -451,6 +458,7 @@ def build_semseg_dataset(
             vflip_prob=args.augment_vflip,
             color_jitter=args.augment_color_jitter,
             directional_flip_policy=args.augment_direction_policy,
+            empty_mask_policy=args.empty_mask_policy,
         )
     raise ValueError(f"Unsupported semantic dataset_type: {dtype}")
 

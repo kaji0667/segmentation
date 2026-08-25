@@ -12,6 +12,7 @@ SAVE_DIR="${SAVE_DIR:-runs/semseg/srp_yolov12m_axis_eval}"
 exec "$PYTHON_BIN" train_semseg.py \
   --eval-only \
   --checkpoint "$CHECKPOINT" \
+  --empty-mask-policy "${EMPTY_MASK_POLICY:-drop}" \
   --data "${DATA:-pre_datasets/RRSIS-D_refseg/data.yaml}" \
   --model "${MODEL:-ultralytics/cfg/models/v12/yolov12m-semseg.yaml}" \
   --device "${DEVICE:-cuda:0}" \

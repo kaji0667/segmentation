@@ -47,6 +47,7 @@ exec "$PYTHON_BIN" train_semseg.py \
   --augment-vflip 0.5 \
   --augment-color-jitter 0.15 \
   --augment-direction-policy "${AUGMENT_DIRECTION_POLICY:-axis-aware}" \
+  --empty-mask-policy "${EMPTY_MASK_POLICY:-drop}" \
   --seed "${SEED:-42}" \
   --pos-weight-max 10 \
   --small-target-boost 1.5 \

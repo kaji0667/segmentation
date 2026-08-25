@@ -891,3 +891,30 @@ Verification:
 - Dry-run command expansion passed with `TEST_AFTER_TRAIN=0` and `TEST_AFTER_TRAIN=1`; the latter correctly appended `--test-after-train --max-test-batches`.
 - A 2-batch CUDA evaluation-only smoke loaded `srp_yolov12m_axis/weights/best_raw.pt`, reported `train samples: 0`, `val samples: 0`, `test samples: 3481`, reused threshold `0.70`, and wrote a separate `test_results.json` under `runs/semseg/srp_yolov12m_axis_eval_smoke_scripts`.
 - Normalized SHA-256 hashes match between publication and working copies for `train_semseg.py`, both scripts, the script README, and the directed test.
+
+## 2026-08-25: Audit RRSIS-D Cleaning and Augmentation
+
+Audit:
+- Scanned all 17,402 expressions: split counts `12181/1740/3481`, no duplicate IDs, no empty text, no invalid class index, and no missing segmentation field.
+- Found three zero-foreground RLE annotations: train `train_22187`, `train_20203`; test `test_413`.
+- Found 4,250 tiny targets at area ratio `<=0.0025`; nearest-neighbor resize to 512 did not erase any non-empty mask. Nearest area-ratio preservation had median `1.000015` and p1/p99 `0.943731/1.058417`.
+- Audited 8,458 direction-bearing expressions; no candidate direction token escaped the current axis-aware blocker.
+
+Changes:
+- Added strict RLE count/size validation and direct encoded foreground-area calculation.
+- Added `drop/error/keep` empty-mask policies; task scripts and training CLI default to `drop` and record the policy in checkpoint arguments.
+- Stopped silently replacing missing text with a class name, prioritized standard `category_id` while retaining legacy `categories_id` compatibility, and validated flip/jitter ranges.
+- Kept image/mask resize, axis-aware flips, color jitter, backbone, neck, OpenCLIP, segmentation head, loss, sampler settings, and evaluation protocol unchanged.
+
+Verification:
+- Python compilation passed; all 29 repository tests passed.
+- Real dataset construction produced `12179/1740/3480` samples and reported exactly the three audited IDs.
+- Batch-4 YOLOv12m CUDA smoke under `runs/semseg/srp_yolov12m_clean_empty_smoke` completed 2 train/2 val/2 test batches, loaded `678/762` pretrained tensors, saved/reloaded checkpoints, and generated `test_results.json`.
+
+Planned controlled run:
+```bash
+GPU=0 DEVICE=cuda:0 BATCH=4 EPOCHS=60 PATIENCE=8 TEST_AFTER_TRAIN=1 \
+SAVE_DIR=runs/semseg/srp_yolov12m_axis_clean_empty bash scripts/train_refseg.sh
+```
+
+For fair attribution, the old YOLOv12m raw-best checkpoint will also be evaluated on the cleaned 3,480-sample test split before comparing it with the newly trained model.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+import warnings
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,7 +10,12 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dataset.rrsisd_refseg_dataset import RRSISDRefSegDataset, _directional_axes
+from dataset.rrsisd_refseg_dataset import (
+    RRSISDRefSegDataset,
+    _directional_axes,
+    clean_rrsisd_rows,
+    segmentation_foreground_area,
+)
 
 
 class AxisAwareAugmentationTest(unittest.TestCase):
@@ -59,6 +65,34 @@ class AxisAwareAugmentationTest(unittest.TestCase):
 
         self.assertEqual(aligned.shape, (3, 4))
         self.assertTrue(set(np.unique(aligned)).issubset({0, 1}))
+
+    def test_empty_mask_is_dropped_explicitly(self):
+        rows = [
+            {"id": "valid", "text": "a ship", "class_idx": 4, "segmentation": {"size": [2, 2], "counts": [1, 1, 2]}},
+            {"id": "empty", "text": "a bridge", "class_idx": 6, "segmentation": {"size": [2, 2], "counts": [4]}},
+        ]
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            cleaned, dropped = clean_rrsisd_rows(rows, empty_mask_policy="drop", context="unit test")
+
+        self.assertEqual([row["id"] for row in cleaned], ["valid"])
+        self.assertEqual(dropped, ["empty"])
+        self.assertIn("Dropped 1 empty-mask", str(caught[0].message))
+
+    def test_empty_mask_can_be_rejected_for_strict_audits(self):
+        row = {"id": "empty", "text": "a bridge", "class_idx": 6, "segmentation": {"size": [2, 2], "counts": [4]}}
+        with self.assertRaisesRegex(ValueError, "Empty segmentation mask"):
+            clean_rrsisd_rows([row], empty_mask_policy="error")
+
+    def test_foreground_area_uses_rle_without_dense_resize(self):
+        self.assertEqual(segmentation_foreground_area({"size": [2, 3], "counts": [1, 2, 3]}), 2)
+        with self.assertRaisesRegex(ValueError, "does not match mask size"):
+            segmentation_foreground_area({"size": [2, 3], "counts": [1, 2]})
+
+    def test_augmentation_ranges_are_validated(self):
+        for kwargs in ({"hflip_prob": -0.1}, {"vflip_prob": 1.1}, {"color_jitter": 1.1}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                RRSISDRefSegDataset([], **kwargs)
 
 
 if __name__ == "__main__":
