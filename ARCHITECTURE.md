@@ -68,6 +68,8 @@ ADR-0004 standardizes the RRSIS-D evaluation protocol while retaining legacy res
 
 ADR-0018 switches the requested mainline training initialization from matched YOLOv12n model/weights to matched YOLOv12m model/weights while retaining the ADR-0015 segmentation head and the established seed-42 protocol.
 
+The completed YOLOv12m run improved test mIoU from `0.539022` to `0.552562` and every Pr@0.5-0.9 metric, while test oIoU changed only from `0.700990` to `0.701171`. Total parameters increased from `4.07M` to `20.29M`, checkpoint size from `36.72 MB` to `150.33 MB`, and reported peak test GPU memory from `339.31 MB` to `726.26 MB`. YOLOv12m is therefore retained as an accuracy-oriented candidate under the user-requested default, not yet established as the resource-efficient comprehensive optimum.
+
 ## RRSIS-D Evaluation Protocol
 
 The semantic segmentation entry now distinguishes the published RRSIS-D metrics from internal diagnostics:

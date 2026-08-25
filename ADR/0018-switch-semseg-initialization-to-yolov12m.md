@@ -2,7 +2,7 @@
 
 ## 状态
 
-Accepted for the requested mainline training run; full experiment result pending.
+Accepted as an accuracy-oriented candidate; not a resource-efficient comprehensive replacement for the YOLOv12n ADR-0015 baseline.
 
 ## 背景
 
@@ -38,3 +38,29 @@ Accepted for the requested mainline training run; full experiment result pending
 - `HFSA-main/run_semseg_preset.sh`
 - `HFSA-main/tests/test_semseg_yolov12m_defaults.py`
 - `ADR/0015-learned-semantic-role-token-pooling.md`
+
+## 实验结果与评估
+
+完整运行位于 `HFSA-main/runs/semseg/srp_yolov12m_axis`。模型在第 52 轮按 `patience=8` 早停，`best_raw.pt` 与 `best.pt` 均来自第 44 轮，validation 冻结阈值为 `0.70`，test 覆盖全部 3,481 条表达。
+
+- test `oIoU=0.701171`
+- test `mIoU=0.552562`
+- `Pr@0.5-0.9=0.623959/0.540362/0.425452/0.319161/0.164321`
+- Precision/Recall/F1 `0.804625/0.845044/0.824339`
+- predicted/target positive rate `0.048995/0.046651`
+- 实际模型参数 `20,287,948`，trainable 参数 `9,493,644`
+- checkpoint `150.33 MB`，test 峰值 GPU `726.26 MB`
+- 52 轮平均 `361.34 s/epoch`，累计 epoch 时间约 `5.22 h`
+
+相对相同 seed、epoch、batch、imgsz、head、loss 和评估协议的 YOLOv12n `srp_axis`：
+
+- oIoU `+0.000181`，基本持平。
+- mIoU `+0.013540`，Pr@0.5-0.9 全部提升 `+0.012353` 至 `+0.025567`。
+- Precision `+0.005490`，Recall `-0.005875`，F1 `+0.000125`。
+- predicted-positive rate 更接近目标比例，外溢差值从 `0.003023` 降至 `0.002343`。
+- 总参数约为 n-scale 的 `4.98x`，trainable 参数 `3.47x`，checkpoint `4.09x`，峰值 GPU 显存 `2.14x`。
+- 单次 test 报告显示 m-scale 更快，但该结果与模型规模不一致，受同机状态影响，不能作为加速结论；需要同进程配对 benchmark 才能用于部署报告。
+
+## 最终决策
+
+YOLOv12m 对逐样本 mask 质量和全部 Pr 指标有稳定收益，适合作为准确率优先候选；但 oIoU 与 F1 几乎不变，且模型大小、参数量和显存代价显著。考虑比赛资源效率与星载适配占较高权重，当前证据不足以把它称为综合最优或无条件替代 YOLOv12n。代码默认保持用户要求的 m-scale，是否作为最终提交主线需在准确率优先与部署效率优先之间明确选择。

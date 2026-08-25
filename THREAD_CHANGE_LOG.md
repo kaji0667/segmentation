@@ -187,3 +187,6 @@
 - `train_semseg.py` 与 `run_semseg_preset.sh` 现在默认使用 `yolov12m-semseg.yaml` 和 `pretrain_model/yolov12m.pt`；m alias 复用统一 YAML，但明确解析 `scale=m`，避免只换权重导致通道不匹配。
 - 静态审计确认总参数 `20,273,356`，预训练权重匹配 `678/762` tensors；冻结 backbone 后 trainable/frozen 为 `9,493,644/10,794,304`。
 - 21 项测试、batch 2 smoke 和 baseline batch 4 的 2-train/2-val/2-test CUDA smoke 均通过；正式 seed-42 完整运行目录为 `runs/semseg/srp_yolov12m_axis`。
+- 正式运行第 52 轮早停，raw-best 为第 44 轮、冻结阈值 `0.70`；test `oIoU=0.701171`、`mIoU=0.552562`，Pr@0.5-0.9 全部高于 n-scale `srp_axis`。
+- mIoU 提升 `0.013540`，但 oIoU 与 F1 基本持平；模型参数、checkpoint 和峰值 test GPU 分别约为 n-scale 的 `4.98x/4.09x/2.14x`。
+- 结论：YOLOv12m 是准确率优先候选，不是已证明的资源效率综合最优；默认 m-scale 按用户要求保留，最终提交需明确准确率与星载部署效率优先级。

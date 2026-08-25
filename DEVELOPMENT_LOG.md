@@ -872,4 +872,8 @@ SAVE_DIR=runs/semseg/srp_yolov12m_axis bash run_semseg_preset.sh baseline
 ```
 
 Status:
-- Full seed-42 training and complete 3,481-sample test are pending.
+- Full seed-42 training completed at epoch 52 by patience; raw-best epoch 44 and frozen threshold `0.70`.
+- Full test: `oIoU=0.701171`, `mIoU=0.552562`, `Pr@0.5-0.9=0.623959/0.540362/0.425452/0.319161/0.164321`.
+- Relative to YOLOv12n `srp_axis`, mIoU improved `+0.013540` and all Pr metrics improved, while oIoU `+0.000181` and F1 `+0.000125` were effectively unchanged; Recall decreased `0.005875`.
+- Parameters/checkpoint/peak test GPU changed from `4.07M/36.72 MB/339.31 MB` to `20.29M/150.33 MB/726.26 MB`.
+- Decision: retain YOLOv12m as an accuracy-oriented candidate, but do not call it the comprehensive resource-efficient optimum without a deployment-priority decision and paired latency benchmark.
