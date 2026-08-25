@@ -175,3 +175,9 @@ The residual last-layer weight norm was `1.011367`, and the complete test mask c
 The default `empty_mask_policy=drop` explicitly removes zero-foreground annotations and reports their IDs. The audited split changes from `12181/1740/3481` to `12179/1740/3480`, removing `train_22187`, `train_20203`, and `test_413`. `error` supports strict audits and `keep` preserves the historical protocol. Empty masks are not repaired from bbox because that would introduce unsupported rectangular pseudo-labels.
 
 The resize path remains bilinear for images and nearest-neighbor for masks: the full audit found no non-empty mask that became empty at 512, while area-preserving threshold resize could inflate some target areas by up to `1.528x`. Axis-aware flips and color jitter strength `0.15` remain unchanged, so the controlled YOLOv12m experiment changes only the confirmed empty-annotation policy.
+
+## Multi-Task Training and Inference Routing
+
+ADR-0020 fixes the integration boundary at a shared YOLOv12m Backbone/Neck plus task-specific Heads, Trainers, datasets, losses, checkpoints, and evaluators. Detection continues to use its Ultralytics text-guided detection pipeline, while referring segmentation continues to use `train_semseg.py`; counting and classification must first expose equivalent task-level interfaces before integration.
+
+Each task owns self-contained `scripts/train_<task>.sh` and `scripts/test_<task>.sh` wrappers. A future common `train.py` may parse a task name or number and dispatch to the corresponding Trainer, but it must not become a combined task implementation. The final interactive task switch is a separate inference router that selects the task configuration, Head, checkpoint, preprocessing, and postprocessing. This decision does not authorize joint multi-dataset or simultaneous multi-Head training.

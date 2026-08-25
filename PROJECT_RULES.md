@@ -95,11 +95,12 @@ HFSA 面向“太空智算背景下的多模态遥感大模型应用探索”。
 
 1. 项目大纲：读取根目录 `MinerU_markdown_XH-202603_面向太空智算的多模态遥感大模型应用探索(2)_2091498104878817280.md`；涉及比赛解释、评测或提交要求时，再读取两份统一答疑 Markdown 的相关章节。
 2. `PROJECT_RULES.md`。
-3. `ARCHITECTURE.md`。
-4. `DEVELOPMENT_LOG.md`。
-5. `ADR/*`。
+3. `CURRENT_STATE.md`。
+4. `ARCHITECTURE.md`。
+5. `DEVELOPMENT_LOG.md`。
+6. `ADR/*`。
 
-如果 `ARCHITECTURE.md`、`DEVELOPMENT_LOG.md` 或 `ADR/` 不存在，第一次相关开发前必须先创建最小版本，记录当前事实和缺失项。创建这些文档仍属于文档建设，不等同于业务开发。
+如果 `CURRENT_STATE.md`、`ARCHITECTURE.md`、`DEVELOPMENT_LOG.md` 或 `ADR/` 不存在，第一次相关开发前必须先创建最小版本，记录当前事实和缺失项。创建这些文档仍属于文档建设，不等同于业务开发。
 
 阅读完成后，不得立即写业务代码。必须先进行 Architecture Review，并输出：
 
@@ -223,6 +224,7 @@ HFSA 面向“太空智算背景下的多模态遥感大模型应用探索”。
 项目根目录必须逐步维护：
 
 - `PROJECT_RULES.md`：唯一权威规则。
+- `CURRENT_STATE.md`：当前可运行状态、未完成事项和下一步；允许更新或替换过期状态，不作为历史日志。
 - `ARCHITECTURE.md`：当前架构、模块边界、数据流、已知技术债、第三方 patch。
 - `DEVELOPMENT_LOG.md`：按日期追加开发记录、测试结果、命令和风险。
 - `ADR/`：架构决策记录目录。
@@ -271,6 +273,11 @@ Docs:
 - `adr`
 
 6. 如果仓库未正确初始化或 Git 状态不可用，必须在最终说明中明确记录，不得假装已提交。
+7. 每次完成代码修改并通过与变更范围匹配的验证后，必须及时创建 Git 提交，并推送到 GitHub 远端仓库 `https://github.com/kaji0667/segmentation.git`；不能仅保留在本地。
+8. 提交说明必须准确列出修改目的、主要文件或行为变化、验证方式和文档更新；不得使用无法说明内容的模糊提交信息。
+9. 推送前必须检查 staged diff，确认没有误提交数据集、模型权重、训练输出、虚拟环境、缓存、凭据或其他敏感内容。
+10. 如果因为认证、网络、分支保护、远端冲突或仓库状态异常而无法推送，必须明确报告原因及本地 commit hash，并将任务标记为尚未完成远端同步。
+11. 除非用户明确要求把多个改动合并为一个提交，否则不同逻辑修改应分别提交并分别注明内容。
 
 ## ADR 规范
 
@@ -361,6 +368,21 @@ Proposed / Accepted / Superseded
 - 团队统一的语义分割预训练权重为 `yolov12m.pt`；正式主线实验必须使用匹配的 m-scale 模型配置，不因 n-scale 更轻量而擅自切回 YOLOv12n。
 - RRSIS-D 解码后前景面积为零的标注默认显式剔除并记录 sample_id；不得把空 mask 当作有效负样本，也不得用 bbox 静默生成伪 mask。
 
+### 多任务训练入口与交付规范
+
+- 团队多任务整合以统一 YOLOv12m Backbone/Neck 和任务专用 Head 为边界；不得为了统一入口把检测、分割、计数、分类等任务强行改成同一种 Dataset、Loss、训练循环或评测协议。
+- 每个任务可以保留独立 Trainer/训练文件，并必须提供自包含的 `scripts/train_<task>.sh` 与 `scripts/test_<task>.sh`。任务脚本应从自身位置定位项目根目录、使用项目相对路径、显式传入数据/模型/权重/输出配置，并直接调用对应任务入口。
+- 部署包不会携带的辅助 preset 或本机脚本不得成为任务脚本的运行时依赖。当前 `train_refseg.sh` 不得重新依赖 `run_semseg_preset.sh`。
+- 如果最终需要统一 `train.py`，它只能作为薄任务分发器：解析任务编号或名称并调用对应 Trainer，不得在分发器中复制或混合各任务的数据、Loss、训练循环和指标实现。
+- 最终用户输入编号或任务名称后的自动切换属于统一推理入口，与训练脚本分离设计；训练阶段仍按任务、数据集和 checkpoint 独立运行。
+- 在所有单任务训练/测试入口完成审计和 smoke 前，不启动联合多数据集、多 Head 同时训练。
+- 结构实验必须以当前最好基线为对照，保持数据 split、seed、训练参数和验证口径一致，并优先采用单变量改动。
+- P2 直接融合、三路 token gate 和 simple decoder 已有未超过基线的实验记录；除非提出可验证的新机制，否则不重复作为默认改进路线。
+- 针对预测外溢的改动，不能只根据 Recall 判断效果；必须同时比较 Precision、预测正像素比例、目标正像素比例和固定样本预览。
+- 未完成受控训练的本地结构变体不得称为当前模型、最好模型或已验证改进；当前主线以已推送提交、源码和实验记录三者一致为准。
+- 训练目录与发布仓库存在两份代码副本时，启动训练前必须核对目标文件哈希或差异，确认训练代码与声明的 commit 一致。
+- 延长 epoch 必须配合 early stopping 和 best-checkpoint 选择；不得用最后一个 epoch 代替最好验证 epoch，也不得把单纯延长训练视为过拟合解决方案。
+
 ### 评估规范
 
 - 遥感多模态任务至少区分检测、分类、分割、变化检测、图像描述/问答等任务类型，不得混用指标。
@@ -368,7 +390,9 @@ Proposed / Accepted / Superseded
 - 分割指标必须记录 pixel_acc、mIoU、target IoU、precision、recall、F1、threshold。
 - RRSIS-D 论文口径中，oIoU/cIoU 必须按全 split 累计前景交并比计算，mIoU/gIoU 必须按逐样本前景 IoU 求平均；不得用背景/前景二分类 mIoU 替代论文 mIoU。
 - RRSIS-D 每类别 mIoU 必须先计算逐样本 IoU，再按 `class_idx` 分组平均；类别累计交并比必须单独标记为 class-oIoU。
+- 追加说明（2026-08-22）：最终提交与标准评估报告不再计算或展示每类别 IoU、class-macro-mIoU；类别统计仅在用户明确要求专项类别诊断时启用。最终核心指标固定为精确定义的 oIoU、mIoU 和 Pr@0.5-0.9，不使用可能发生语义冲突的 cIoU/gIoU 别名。
 - test split 的二值化阈值必须由 validation split 选择并冻结，禁止在 test split 上重新扫描最优阈值。
+- 外溢相关实验还必须记录 predicted-positive rate 与 target-positive rate；条件允许时记录 sample mIoU。
 - 资源效率必须记录模型大小、参数量、显存、推理速度或训练吞吐，条件允许时纳入对比。
 - 评估结果不得只报最好值，必须记录可复现命令和数据 split。
 
@@ -388,8 +412,8 @@ Proposed / Accepted / Superseded
 
 ## 当前已知问题
 
-1. 根目录和 `HFSA-main` 内均显示 `.git` 目录项，但 `git status` 当前未能识别为 Git 仓库；后续 Git 操作前必须先诊断仓库状态。
-2. 当前未发现根目录 `README.md`、`ARCHITECTURE.md`、`DEVELOPMENT_LOG.md`、`ADR/`，后续开发前需要补齐。
+1. 当前可用发布仓库位于 `tmp/github_segmentation_publish_20260812_133605`；实际训练代码位于 `HFSA-main`。两份代码可能发生漂移，发布或训练前必须显式同步并核对。
+2. 项目状态以根目录 `CURRENT_STATE.md`、`ARCHITECTURE.md`、`DEVELOPMENT_LOG.md` 和 `ADR/` 为准；新对话开始时应先读取这些文件。
 3. `hfsa_env/`、`data/`、`runs/`、`pretrain_model/`、`*.pt` 等大体积或环境内容混在项目目录中，存在误扫描、误提交和上下文污染风险。
 4. 训练入口与部分工具函数存在重复解析逻辑，后续应收敛到单一工具模块。
 5. `train_semseg.py` 文件承担参数、数据、训练、验证、绘图、checkpoint 等多种职责，后续应按模块逐步拆分。
@@ -413,11 +437,26 @@ Proposed / Accepted / Superseded
 - 记录当前项目目标、模块边界、开发流程、文档/Git/ADR/重构规则，以及多模态遥感专项规范。
 - 明确开始开发前必须完成 Architecture Review，并等待用户确认。
 
+### 2026-08-17
+
+- 确立结构实验以最好基线进行 seed 和验证口径一致的单变量对照。
+- 记录 P2、三路 token gate 和 simple decoder 不作为默认重复路线。
+- 针对预测外溢，增加 Precision、预测/目标正像素比例和固定预览的评估要求。
+- 明确未训练的本地结构变体不能作为当前主线；训练代码、发布 commit 和实验记录必须一致。
+- 明确延长 epoch 仍需 early stopping 与 best checkpoint，不能将其本身视为过拟合解决方案。
+
 ### 2026-08-23
 
 - 将比赛方案与两次统一答疑的 AI 阅读入口从 PDF 更新为根目录 MinerU Markdown 转换稿。
 - 将根目录 `MinerU_markdown_*.md` 登记为本地 RRSIS 文献语料库，并规定按任务选择相关论文，避免无目的全量读取。
 - 明确 Markdown 优先用于检索和结构化阅读，但公式、表格、图片与 OCR 可疑内容必须交叉核对。
+
+### 2026-08-25 多任务入口整合补充
+
+- 明确采用任务专用 Trainer 与自包含训练/测试脚本，不强行合并不同任务的 Dataset、Loss、训练循环和指标。
+- 统一训练入口若需要实现，只承担任务分发；统一推理入口与训练入口分离。
+- 明确分割训练脚本不得依赖部署时不会携带的 `run_semseg_preset.sh`，所有任务脚本必须使用项目相对路径。
+- 将 `CURRENT_STATE.md` 纳入每个新对话的必读文档，用于维护当前状态和下一步；历史过程继续写入 `DEVELOPMENT_LOG.md` 与 `THREAD_CHANGE_LOG.md`。
 
 ## 追加说明：跨线程上下文补充
 

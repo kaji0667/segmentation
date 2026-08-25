@@ -918,3 +918,19 @@ SAVE_DIR=runs/semseg/srp_yolov12m_axis_clean_empty bash scripts/train_refseg.sh
 ```
 
 For fair attribution, the old YOLOv12m raw-best checkpoint will also be evaluated on the cleaned 3,480-sample test split before comparing it with the newly trained model.
+
+## 2026-08-25: Consolidate Multi-Task Training Integration Decision
+
+Scope:
+- Compared the existing text-guided detection `train.py` with the referring-segmentation `train_semseg.py` and confirmed they share YOLOv12m/OpenCLIP infrastructure but not Dataset, Head output, Loss, training loop, or evaluation protocol.
+- Accepted task-specific Trainers and self-contained train/test scripts as the integration unit; a future common `train.py` is limited to thin task dispatch. Added ADR-0020 and refreshed `CURRENT_STATE.md`.
+- Kept all model, data, loss, augmentation, checkpoint, and evaluation code unchanged in this documentation-only update.
+
+Current verified result status:
+- No new full model experiment was completed in this conversation.
+- The latest completed YOLOv12m full result remains the historical 3,481-sample run `srp_yolov12m_axis`: `oIoU=0.701171`, `mIoU=0.552562`, frozen threshold `0.70`.
+- The current cleaned protocol is `12179/1740/3480`; its batch-4 CUDA smoke passed, but the full cleaned seed-42 result remains pending and must not be invented or compared against the historical result until completed.
+
+Next verification:
+- Complete `runs/semseg/srp_yolov12m_axis_clean_empty` on A5000 and re-evaluate the old raw-best checkpoint on the same 3,480-sample test split.
+- Audit each teammate task's model YAML, Head interface, Loss, dataset, checkpoint, metrics, and resource-measurement command before adding a common dispatcher.

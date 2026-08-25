@@ -13,7 +13,7 @@ This repository contains the code needed for the HFSA text-guided remote-sensing
 - `HFSA-main/run_semseg_preset.sh`: reusable training presets.
 - `HFSA-main/scripts/train_refseg.sh`: project-relative YOLOv12m training entry for the referring-segmentation task.
 - `HFSA-main/scripts/test_refseg.sh`: evaluation-only entry for an existing referring-segmentation checkpoint.
-- Project notes: `ARCHITECTURE.md`, `DEVELOPMENT_LOG.md`, `THREAD_CHANGE_LOG.md`, `PROJECT_RULES.md`, `LITERATURE_READING_GUIDE.md`.
+- Project notes: `CURRENT_STATE.md`, `ARCHITECTURE.md`, `DEVELOPMENT_LOG.md`, `THREAD_CHANGE_LOG.md`, `PROJECT_RULES.md`, `LITERATURE_READING_GUIDE.md`.
 
 ## Excluded
 

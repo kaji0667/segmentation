@@ -205,3 +205,11 @@
 - 最近邻缩放到 512 未使任何非空 mask 消失，因此保留现有 mask resize；axis-aware 翻转和 `0.15` 色彩扰动不变，只新增参数范围校验。
 - 数据准备不再把空文本静默替换为类别名，类别字段优先标准 `category_id` 并兼容旧 `categories_id`。
 - 29 项测试和 YOLOv12m batch-4 的 2-train/2-val/2-test CUDA smoke 已通过；正式运行目录定为 `runs/semseg/srp_yolov12m_axis_clean_empty`。
+
+### 29. 固化多任务训练入口整合方案
+
+- 检测、指代分割、计数和分类保留各自 Trainer、数据加载、Head、Loss、checkpoint 与评测逻辑，不合并为一个巨型训练循环。
+- 每个任务提供自包含的 `scripts/train_<task>.sh` 和 `scripts/test_<task>.sh`；分割脚本直接调用 `train_semseg.py`，不依赖 `run_semseg_preset.sh`。
+- 若最终需要公共 `train.py`，它只解析任务编号/名称并分发到对应 Trainer；最终编号或任务名称切换由独立推理入口负责。
+- 新增 ADR-0020 与 `CURRENT_STATE.md`，记录当前脚本、空 mask 清洗协议、历史 YOLOv12m 指标和 A5000 下一步。
+- 本次仅更新架构与跨对话文档，没有产生新的完整模型实验结果；cleaned 3480-sample 正式训练仍待完成。
