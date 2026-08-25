@@ -1,7 +1,9 @@
 import argparse
 import csv
 import json
+import os
 import random
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -81,6 +83,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-after-train", action="store_true", help="Evaluate the best checkpoint on the test split using the validation-selected threshold.")
     parser.add_argument("--eval-only", action="store_true", help="Evaluate an existing full checkpoint without building the train/val datasets.")
     parser.add_argument("--checkpoint", type=str, default="", help="Full semantic-segmentation checkpoint used by --eval-only.")
+    parser.add_argument("--resume", type=str, default="", help="Resume training from a full last.pt checkpoint, including optimizer state.")
     parser.add_argument("--max-test-batches", type=int, default=0, help="Stop test evaluation after this many batches; 0 means full test split.")
     parser.add_argument("--print-interval", type=int, default=10, help="Print train progress every N batches.")
     parser.add_argument("--save-dir", type=str, default="runs/semseg/train", help="Directory for run artifacts.")
@@ -747,19 +750,134 @@ def save_checkpoint(
     args: argparse.Namespace,
     data: Dict[str, Any],
     metrics: Dict[str, float],
+    scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
+    training_state: Optional[Dict[str, Any]] = None,
+    data_generator: Optional[torch.Generator] = None,
+    retries: int = 5,
+    retry_delay: float = 1.0,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {
-            "epoch": int(epoch),
-            "model": model.state_dict(),
-            "optimizer": optimizer.state_dict(),
-            "args": vars(args),
-            "data": data,
-            "metrics": metrics,
+    payload = {
+        "epoch": int(epoch),
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict() if scheduler is not None else None,
+        "args": vars(args),
+        "data": data,
+        "metrics": metrics,
+        "training_state": training_state or {},
+        "rng_state": {
+            "python": random.getstate(),
+            "numpy": np.random.get_state(),
+            "torch": torch.get_rng_state(),
+            "cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+            "data_generator": data_generator.get_state() if data_generator is not None else None,
         },
-        path,
+    }
+    attempts = max(int(retries), 1)
+    last_error: Optional[BaseException] = None
+    for attempt in range(1, attempts + 1):
+        fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+        os.close(fd)
+        temp_path = Path(temp_name)
+        try:
+            torch.save(payload, temp_path)
+            os.replace(temp_path, path)
+            return
+        except (OSError, RuntimeError) as exc:
+            last_error = exc
+            temp_path.unlink(missing_ok=True)
+            if attempt >= attempts:
+                break
+            print(f"checkpoint save retry {attempt}/{attempts - 1} for {path}: {exc}")
+            time.sleep(max(float(retry_delay), 0.0))
+    raise RuntimeError(f"Failed to save checkpoint after {attempts} attempt(s): {path}") from last_error
+
+
+def recover_training_state(results_csv: Path, completed_epoch: int, min_delta: float) -> Dict[str, Any]:
+    """Rebuild best scores and patience state from committed result rows."""
+    best_fitness = -float("inf")
+    best_raw_fitness = -float("inf")
+    epochs_without_improvement = 0
+    if results_csv.exists():
+        with results_csv.open("r", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                row_epoch = int(row["epoch"])
+                if row_epoch > completed_epoch:
+                    continue
+                value = row.get("selection_score") or ""
+                fitness = float(value) if value else -float(row["train_loss"])
+                best_raw_fitness = max(best_raw_fitness, fitness)
+                if fitness > best_fitness + float(min_delta):
+                    best_fitness = fitness
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
+    return {
+        "best_fitness": best_fitness,
+        "best_raw_fitness": best_raw_fitness,
+        "epochs_without_improvement": epochs_without_improvement,
+    }
+
+
+def trim_uncommitted_results(results_csv: Path, completed_epoch: int) -> Optional[Path]:
+    """Back up and remove rows newer than the resume checkpoint epoch."""
+    if not results_csv.exists():
+        return None
+    with results_csv.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames or []
+        rows = list(reader)
+    kept = [row for row in rows if int(row["epoch"]) <= completed_epoch]
+    if len(kept) == len(rows):
+        return None
+    backup_path = results_csv.with_name(f"{results_csv.name}.pre_resume_epoch{completed_epoch}.bak")
+    suffix = 1
+    while backup_path.exists():
+        backup_path = results_csv.with_name(f"{results_csv.name}.pre_resume_epoch{completed_epoch}.{suffix}.bak")
+        suffix += 1
+    os.replace(results_csv, backup_path)
+    with results_csv.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(kept)
+    return backup_path
+
+
+def validate_resume_args(current_args: argparse.Namespace, checkpoint_args: Dict[str, Any]) -> None:
+    """Reject resume commands that would silently change the established protocol."""
+    keys = (
+        "data", "model", "weights", "epochs", "batch", "imgsz", "seed", "deterministic",
+        "lr", "weight_decay", "scheduler", "min_lr", "patience", "min_delta",
+        "train_head_only", "freeze_backbone", "freeze_neck", "pos_weight_max",
+        "loss_small_target_weight", "loss_small_target_area", "loss_tversky_fp_weight",
+        "loss_fp_weight", "small_target_boost", "small_target_area", "augment",
+        "augment_hflip", "augment_vflip", "augment_color_jitter", "augment_direction_policy",
+        "empty_mask_policy", "val_thresholds", "val_select_metric", "val_fbeta",
+        "max_batches", "max_val_batches", "text_queries", "text_encoder", "text_model_name",
+        "text_pretrained", "text_precision",
     )
+    mismatches = []
+    current = vars(current_args)
+    for key in keys:
+        if key in checkpoint_args and current.get(key) != checkpoint_args.get(key):
+            mismatches.append(f"{key}: current={current.get(key)!r}, checkpoint={checkpoint_args.get(key)!r}")
+    if mismatches:
+        raise ValueError("Resume protocol mismatch:\n" + "\n".join(mismatches))
+
+
+def restore_rng_state(checkpoint: Dict[str, Any], data_generator: torch.Generator) -> bool:
+    state = checkpoint.get("rng_state")
+    if not state:
+        return False
+    random.setstate(state["python"])
+    np.random.set_state(state["numpy"])
+    torch.set_rng_state(state["torch"].cpu())
+    if torch.cuda.is_available() and state.get("cuda") is not None:
+        torch.cuda.set_rng_state_all([value.cpu() for value in state["cuda"]])
+    if state.get("data_generator") is not None:
+        data_generator.set_state(state["data_generator"].cpu())
+    return True
 
 
 def append_results(path: Path, row: Dict[str, float]) -> None:
@@ -1053,6 +1171,8 @@ def build_summary_writer(save_dir: Path, disabled: bool):
 
 def main() -> None:
     args = parse_args()
+    if args.eval_only and args.resume:
+        raise ValueError("--eval-only and --resume are mutually exclusive.")
     if args.eval_only:
         if not args.checkpoint:
             raise ValueError("--eval-only requires --checkpoint.")
@@ -1184,7 +1304,19 @@ def main() -> None:
 
     writer = build_summary_writer(save_dir, args.no_tensorboard or args.nosave)
     model = SemanticSegmentationModel(args.model, ch=3, nc=nc, verbose=False).to(device)
-    if not args.eval_only:
+    resume_checkpoint: Optional[Dict[str, Any]] = None
+    start_epoch = 0
+    if args.resume:
+        resume_path = resolve_checkpoint_path(args.resume)
+        if not resume_path.exists():
+            raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
+        resume_checkpoint = torch.load(resume_path, map_location=device, weights_only=False)
+        validate_resume_args(args, resume_checkpoint.get("args", {}))
+        model.load_state_dict(resume_checkpoint["model"], strict=True)
+        start_epoch = int(resume_checkpoint["epoch"])
+        if start_epoch < 0 or start_epoch >= int(args.epochs):
+            raise ValueError(f"Resume checkpoint epoch {start_epoch} is outside training range 0..{args.epochs - 1}.")
+    elif not args.eval_only:
         load_pretrained_backbone(model, args.weights, device)
     model.loss_pos_weight_max = float(args.pos_weight_max)
     model.loss_small_target_weight = float(args.loss_small_target_weight)
@@ -1203,13 +1335,30 @@ def main() -> None:
         if args.eval_only
         else torch.optim.AdamW((p for p in model.parameters() if p.requires_grad), lr=args.lr, weight_decay=args.weight_decay)
     )
+    if resume_checkpoint is not None:
+        if optimizer is None or "optimizer" not in resume_checkpoint:
+            raise ValueError("Resume checkpoint does not contain optimizer state.")
+        optimizer.load_state_dict(resume_checkpoint["optimizer"])
     scheduler = None
     if args.scheduler == "cosine" and optimizer is not None:
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=max(int(args.epochs), 1),
-            eta_min=float(args.min_lr),
-        )
+        saved_scheduler = resume_checkpoint.get("scheduler") if resume_checkpoint is not None else None
+        if resume_checkpoint is not None and saved_scheduler is None:
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=max(int(args.epochs), 1),
+                eta_min=float(args.min_lr),
+                last_epoch=start_epoch - 1,
+            )
+        else:
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=max(int(args.epochs), 1),
+                eta_min=float(args.min_lr),
+            )
+            if saved_scheduler is not None:
+                scheduler.load_state_dict(saved_scheduler)
+                for param_group, lr in zip(optimizer.param_groups, scheduler.get_last_lr()):
+                    param_group["lr"] = lr
     prompt_embeddings = build_prompt_embeddings(args, data, names, device)
 
     print(f"data: {args.data}")
@@ -1222,6 +1371,8 @@ def main() -> None:
     print(f"weights: {'<not loaded in eval-only mode>' if args.eval_only else (args.weights or '<none>')}")
     if args.eval_only:
         print(f"checkpoint: {args.checkpoint}")
+    elif args.resume:
+        print(f"resume checkpoint: {args.resume} (completed epoch {start_epoch})")
     print(f"text queries: {args.text_queries}")
     print(f"text encoder: {args.text_encoder}")
     print(f"device: {device}")
@@ -1255,12 +1406,34 @@ def main() -> None:
     if not args.nosave:
         print(f"save dir: {save_dir}")
 
-    best_fitness = -float("inf")
-    best_raw_fitness = -float("inf")
-    epochs_without_improvement = 0
+    if resume_checkpoint is not None:
+        backup_path = trim_uncommitted_results(results_csv, start_epoch)
+        if backup_path is not None:
+            print(f"backed up uncommitted result rows to: {backup_path}")
+        recovered_state = resume_checkpoint.get("training_state") or recover_training_state(
+            results_csv,
+            start_epoch,
+            float(args.min_delta),
+        )
+        best_fitness = float(recovered_state["best_fitness"])
+        best_raw_fitness = float(recovered_state["best_raw_fitness"])
+        epochs_without_improvement = int(recovered_state["epochs_without_improvement"])
+        if restore_rng_state(resume_checkpoint, data_generator):
+            print("restored checkpoint RNG and dataloader-generator state")
+        else:
+            print("warning: legacy checkpoint has no RNG state; resumed sampling is deterministic from seed 42 but not bitwise-continuous")
+        print(
+            "resume state: "
+            f"best={best_fitness:.6f}, raw_best={best_raw_fitness:.6f}, "
+            f"epochs_without_improvement={epochs_without_improvement}"
+        )
+    else:
+        best_fitness = -float("inf")
+        best_raw_fitness = -float("inf")
+        epochs_without_improvement = 0
     last_confusion = None
 
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         epoch_start = time.time()
         running = 0.0
         seen = 0
@@ -1397,8 +1570,23 @@ def main() -> None:
                 for name, value in val_metrics.get("text_class_iou", {}).items():
                     writer.add_scalar(f"metrics/class_oIoU/{name}", value, epoch + 1)
 
+        fitness = float(val_metrics["selection_score"]) if val_metrics else -train_loss
+        improved, raw_improved = checkpoint_improvement_flags(
+            fitness,
+            best_fitness,
+            best_raw_fitness,
+            float(args.min_delta),
+        )
+        next_best_fitness = fitness if improved else best_fitness
+        next_best_raw_fitness = fitness if raw_improved else best_raw_fitness
+        next_epochs_without_improvement = (
+            0 if improved else epochs_without_improvement + (1 if val_metrics else 0)
+        )
+
+        if scheduler is not None:
+            scheduler.step()
+
         if not args.nosave:
-            append_results(results_csv, metrics)
             checkpoint_metrics = {
                 "train_loss": float(train_loss),
                 "val_loss": float(val_metrics["loss"]) if val_metrics else float("nan"),
@@ -1424,26 +1612,29 @@ def main() -> None:
                 "target_pos_rate": float(val_metrics["target_pos_rate"]) if val_metrics else float("nan"),
                 "class_macro_miou": float(val_metrics["class_macro_miou"]) if val_metrics else float("nan"),
             }
+            training_state = {
+                "best_fitness": float(next_best_fitness),
+                "best_raw_fitness": float(next_best_raw_fitness),
+                "epochs_without_improvement": int(next_epochs_without_improvement),
+            }
             last_path = weights_dir / "last.pt"
-            save_checkpoint(last_path, model, optimizer, epoch + 1, args, data, checkpoint_metrics)
-            fitness = float(val_metrics["selection_score"]) if val_metrics else -train_loss
-            improved, raw_improved = checkpoint_improvement_flags(
-                fitness,
-                best_fitness,
-                best_raw_fitness,
-                float(args.min_delta),
+            save_checkpoint(
+                last_path, model, optimizer, epoch + 1, args, data, checkpoint_metrics,
+                scheduler=scheduler, training_state=training_state, data_generator=data_generator,
             )
             if raw_improved:
-                best_raw_fitness = fitness
-                save_checkpoint(weights_dir / "best_raw.pt", model, optimizer, epoch + 1, args, data, checkpoint_metrics)
+                save_checkpoint(
+                    weights_dir / "best_raw.pt", model, optimizer, epoch + 1, args, data, checkpoint_metrics,
+                    scheduler=scheduler, training_state=training_state, data_generator=data_generator,
+                )
                 print(f"saved raw-best checkpoint: {weights_dir / 'best_raw.pt'}")
             if improved:
-                best_fitness = fitness
-                epochs_without_improvement = 0
-                save_checkpoint(weights_dir / "best.pt", model, optimizer, epoch + 1, args, data, checkpoint_metrics)
+                save_checkpoint(
+                    weights_dir / "best.pt", model, optimizer, epoch + 1, args, data, checkpoint_metrics,
+                    scheduler=scheduler, training_state=training_state, data_generator=data_generator,
+                )
                 print(f"saved best checkpoint: {weights_dir / 'best.pt'}")
-            elif val_metrics:
-                epochs_without_improvement += 1
+            append_results(results_csv, metrics)
             print(f"saved last checkpoint: {last_path}")
 
             if not args.no_plots:
@@ -1451,8 +1642,9 @@ def main() -> None:
                 if last_confusion is not None:
                     plot_confusion_matrix(last_confusion, metric_names, save_dir / "confusion_matrix.png")
 
-        if scheduler is not None:
-            scheduler.step()
+        best_fitness = next_best_fitness
+        best_raw_fitness = next_best_raw_fitness
+        epochs_without_improvement = next_epochs_without_improvement
 
         if val_metrics and args.patience > 0 and epochs_without_improvement >= args.patience:
             print(
