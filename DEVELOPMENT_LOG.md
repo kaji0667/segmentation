@@ -934,3 +934,30 @@ Current verified result status:
 Next verification:
 - Complete `runs/semseg/srp_yolov12m_axis_clean_empty` on A5000 and re-evaluate the old raw-best checkpoint on the same 3,480-sample test split.
 - Audit each teammate task's model YAML, Head interface, Loss, dataset, checkpoint, metrics, and resource-measurement command before adding a common dispatcher.
+
+## 2026-08-25: Integrate Object Counting as a Task-Specific Head and Class-Based Module
+
+Scope:
+- Audited the teammate repository and confirmed its counting algorithm is text-guided class-agnostic detection followed by NMS box counting, not a density-map or count-regression architecture.
+- Added `CountingDetect(Detect)` as a behavior-preserving task Head and registered it in Ultralytics parsing. Added `yolov12-counting.yaml`; the standard alias resolves to m scale with `nc=1`.
+- Added class-based counting configuration, VOC sample access, letterbox preprocessing, OpenCLIP prompt caching, inference, EM/MAE/RMSE evaluation, per-class reporting, and visualization under `HFSA-main/counting/`.
+- Added independent `train_counting.py`, `test_counting.py`, `scripts/train_counting.sh`, and `scripts/test_counting.sh`. Removed the teammate's personal absolute paths, hardware label, and IDE assumptions while preserving the training and evaluation structure.
+- Kept Backbone, Neck, OpenCLIP, detection Loss, segmentation Head, segmentation training, and the isolated teammate repository unchanged.
+
+Protocol:
+- Counting training continues to use `TextGuidedDetectionTrainer` and `TextGuidedDetectionValidator`.
+- Counting configuration now actually propagates `visual_attr_include_geom=False`, `lambda_relation=0`, and `lambda_spatial_quadrant=0`, which the teammate entry assigned but its base config builder did not carry.
+- Evaluation preserves the teammate positive-query VOC protocol and explicitly records `positive_voc_class_queries`; zero-count class queries remain outside the current protocol.
+
+Verification:
+- Python compilation passed for active and publication counting sources.
+- `bash -n` passed for both counting scripts; `PYTHON_BIN=echo` dry runs confirmed project-relative model/data/weight/output arguments and trailing CLI override behavior.
+- Six counting tests passed: Detect/CountingDetect forward equivalence, m-scale YAML/Head parsing, task configuration, metric formulas, relative CLI defaults, and script contract.
+- Static model construction loaded `pretrain_model/yolov12m.pt` into `yolov12m-counting.yaml`, transferred `793/799` items, and confirmed `head=CountingDetect`, `scale=m`, `nc=1`.
+- Publication repository full CPU regression passed all 39 tests with `CUDA_VISIBLE_DEVICES` empty.
+- Active training-copy regression ran 36 tests; its only error was the pre-existing `test_semseg_checkpoint_recovery` import mismatch because active `train_semseg.py` has not yet received publication commit `e42b12e`. No counting test failed.
+- Active and publication copies of all counting source, script, test, YAML, and Ultralytics registration files were CRLF-normalized and content-compared with no differences.
+
+Limitations:
+- No VRSBench dataset or teammate-trained counting checkpoint is bundled, so no real-image training or counting inference smoke was run.
+- GPU tests were intentionally not started because the user had an active experiment; all regression tests forced CPU visibility.

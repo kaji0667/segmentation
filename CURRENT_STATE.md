@@ -7,7 +7,7 @@
 - 当前个人负责的任务是 RRSIS-D 文本引导单目标二值分割：输入遥感图像与自由文本描述，输出对应目标的 `[B,1,H,W]` mask。
 - 团队已确认多任务共用 YOLOv12m Backbone 和 Neck；当前分割分支使用匹配的 `yolov12m-semseg.yaml`、`yolov12m.pt`、P3/P4/P5 和 ADR-0015 `TextPromptSegment` 语义角色 token pooling Head。
 - 未经用户确认，不修改 Backbone、Neck、OpenCLIP 或其他成员任务实现。
-- 当前发布代码基线已包含 `8f213c2` 空 mask 清洗提交；工作副本与发布副本中的分割训练入口、任务脚本和测试保持同步。
+- 当前发布代码基线为 `e42b12e`，包含空 mask 清洗与 checkpoint 恢复；工作副本的计数新增文件已与发布副本同步，但工作副本 `train_semseg.py` 仍缺少发布提交中的恢复函数，待当前实验结束后再单独同步。
 
 ## 已完成的分割任务封装
 
@@ -40,19 +40,22 @@
 
 ## 其他成员代码状态
 
-- 本地已导入队友目标计数仓库 `HFSA-main/HFSA-Object-Counting/`，目前保持隔离，尚未完成 Head、Loss、数据配置、训练入口和评测协议审计，也未接入公共分发器。
-- 不应在未审计前直接把队友代码复制进公共 `head.py`、`loss.py` 或主训练入口。
+- 队友目标计数代码已完成第一阶段任务化接入：新增不改变 `Detect` 行为的 `CountingDetect` Head、`yolov12m-counting.yaml`、类化 counting 包、`train_counting.py`、`test_counting.py` 和自包含训练/测试脚本。
+- 计数仍采用原有“文本引导类无关检测 -> NMS -> 检测框数”逻辑，不引入密度图、计数回归 Head 或新 Loss；共享 YOLOv12m Backbone/Neck、OpenCLIP 和文本引导检测 Trainer。
+- 计数评测当前明确保持队友的 positive-query VOC 协议，只查询 XML 中实际存在的类别，报告 EM、MAE、RMSE 与逐类别统计；不得把它表述为包含零计数问答的完整协议。
+- 队友仓库未提供训练 checkpoint，本地也未完成 VRSBench 真实数据 smoke；当前验证范围为语法、参数展开、Head 等价性、模型构建和预训练权重静态加载。
 
 ## 下一步
 
 1. 在 A5000 上完成 cleaned 协议的 YOLOv12m 正式训练与完整 test，并记录参数量、checkpoint 大小、显存、训练耗时和推理速度。
 2. 使用旧 YOLOv12m raw-best checkpoint 在相同的 3480-sample cleaned test 上复评，再与新训练结果比较，分离数据清洗与重新训练的影响。
-3. 收集每位队友的模型 YAML、Head 输入输出、Loss、数据集格式、训练命令、checkpoint 和评测指标，逐项审计是否满足统一 YOLOv12m Backbone/Neck 接口。
-4. 为每个任务建立独立的 `scripts/train_<task>.sh` 与 `scripts/test_<task>.sh`，先保证单任务可复现，再实现可选的薄训练分发器。
+3. 获取计数队友的 VRSBench 数据路径和训练 checkpoint，运行最小训练 smoke 与 1-2 张图的独立计数评测，确认 checkpoint 严格加载和真实 EM/MAE/RMSE 输出。
+4. 继续收集分类等其他任务的 YAML、Head、Loss、数据和 checkpoint；每个任务先建立独立脚本并通过 smoke，再实现可选薄分发器。
 5. 所有任务稳定后，再设计统一推理入口和 A5000 同条件资源测评；当前不要提前合并为联合多数据集训练。
 
 ## 部署注意
 
 - 分割训练包不需要携带 `run_semseg_preset.sh`；`scripts/train_refseg.sh` 已包含所需正式参数。
 - 运行前仍需提供项目源码、RRSIS-D 数据与缓存、`pretrain_model/yolov12m.pt`，并激活具备 PyTorch、OpenCLIP、OpenCV 等依赖的环境。
+- 计数训练还需提供 VOC 风格 VRSBench 数据；独立测试需提供计数 `best.pt`，默认路径均可通过脚本环境变量覆盖。
 - 默认训练输出目录已有历史结果时，应通过 `SAVE_DIR` 指定新目录，避免覆盖旧实验。

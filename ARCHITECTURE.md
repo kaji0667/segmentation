@@ -181,3 +181,32 @@ The resize path remains bilinear for images and nearest-neighbor for masks: the 
 ADR-0020 fixes the integration boundary at a shared YOLOv12m Backbone/Neck plus task-specific Heads, Trainers, datasets, losses, checkpoints, and evaluators. Detection continues to use its Ultralytics text-guided detection pipeline, while referring segmentation continues to use `train_semseg.py`; counting and classification must first expose equivalent task-level interfaces before integration.
 
 Each task owns self-contained `scripts/train_<task>.sh` and `scripts/test_<task>.sh` wrappers. A future common `train.py` may parse a task name or number and dispatch to the corresponding Trainer, but it must not become a combined task implementation. The final interactive task switch is a separate inference router that selects the task configuration, Head, checkpoint, preprocessing, and postprocessing. This decision does not authorize joint multi-dataset or simultaneous multi-Head training.
+
+## Text-Guided Object Counting Task
+
+The teammate counting task is now integrated as a detection-compatible task boundary rather than a copied repository. Its algorithm remains:
+
+```text
+image + target-class prompt
+-> OpenCLIP text embedding
+-> TextGuidedDetectionModel with CountingDetect
+-> class-agnostic detections
+-> NMS
+-> number of retained boxes
+```
+
+`CountingDetect` subclasses `Detect` without overriding `forward`. It exists to make the task Head explicit in YAML, checkpoints, architecture reports, and future routing while preserving the original detection tensor contract, pretrained parameter names, and loss behavior. `yolov12-counting.yaml` shares the YOLOv12 Backbone/Neck and uses a one-class Head; the standard script selects the m-scale alias and initializes from `yolov12m.pt`.
+
+The task-specific class boundary is:
+
+- `CountingTextConfig`: applies the teammate's counting preset, including disabled geometry/relation/quadrant terms and retained semantic enhancement options.
+- `VRSCountingDataset`: reads VOC split files, images, XML annotations, and positive per-class counts.
+- `CountingImagePreprocessor`: preserves the original 800-square letterbox and normalization path.
+- `CountingPromptEncoder`: caches the original remote-sensing OpenCLIP class prompts.
+- `ObjectCounter`: runs the text-guided model and counts NMS-filtered detections.
+- `CountingEvaluator` and `CountingVisualizer`: compute EM/MAE/RMSE, per-class results, reports, and box visualizations.
+- `CountingTrainingApplication` and `CountingEvaluationApplication`: own the independent CLI orchestration.
+
+`scripts/train_counting.sh` and `scripts/test_counting.sh` follow the same project-relative, environment-overridable task-script contract as the referring-segmentation scripts. The imported teammate repository remains an isolated provenance snapshot and is not a runtime dependency.
+
+The current evaluator intentionally preserves the teammate's positive-query VOC protocol: only classes present in each XML are queried. Zero-count class queries are not included, so these reports must not be presented as a complete counting-QA protocol. No full VRSBench smoke or trained-checkpoint evaluation has been completed because neither the dataset nor teammate checkpoint is bundled. See ADR-0021.

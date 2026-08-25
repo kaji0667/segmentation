@@ -213,3 +213,12 @@
 - 若最终需要公共 `train.py`，它只解析任务编号/名称并分发到对应 Trainer；最终编号或任务名称切换由独立推理入口负责。
 - 新增 ADR-0020 与 `CURRENT_STATE.md`，记录当前脚本、空 mask 清洗协议、历史 YOLOv12m 指标和 A5000 下一步。
 - 本次仅更新架构与跨对话文档，没有产生新的完整模型实验结果；cleaned 3480-sample 正式训练仍待完成。
+
+### 31. 将目标计数包装为独立 Head 与类化任务模块
+
+- 新增 `CountingDetect(Detect)`，不重写前向过程；其参数、检测输出和 Loss 契约与原 `Detect` 等价。新增 `yolov12-counting.yaml`，正式入口通过 `yolov12m-counting.yaml` 使用统一 m-scale Backbone/Neck。
+- 将队友原有计数配置、VOC XML 解析、letterbox、OpenCLIP Prompt、NMS 计数、EM/MAE/RMSE、可视化分别包装为类，保留“检测框数量即计数”的原逻辑。
+- 新增 `train_counting.py`、`test_counting.py`、`scripts/train_counting.sh` 和 `scripts/test_counting.sh`；清除个人绝对路径、显卡名称和工程目录，默认均为项目相对路径。
+- 计数评测继续采用 positive-query VOC 协议，只测试 XML 中存在的类别，并在 JSON 报告中明确记录，暂不扩展零计数查询。
+- 6 项计数定向测试、脚本语法/参数展开、预训练静态加载通过；发布仓库全量 39 项 CPU 测试通过。由于用户正在运行实验，本次未启动 GPU smoke。
+- 队友仓库缺少训练 checkpoint 和随仓库数据，真实 VRSBench 训练/测试 smoke 等拿到相应路径和权重后再执行。

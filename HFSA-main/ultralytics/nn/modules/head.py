@@ -15,7 +15,7 @@ from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import bias_init_with_prob, linear_init
 
-__all__ = "Detect", "Segment", "SemanticSegment", "TextPromptSegment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect"
+__all__ = "Detect", "CountingDetect", "Segment", "SemanticSegment", "TextPromptSegment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect"
 
 
 class Detect(nn.Module):
@@ -170,6 +170,17 @@ class Detect(nn.Module):
         scores, index = scores.flatten(1).topk(min(max_det, anchors))
         i = torch.arange(batch_size)[..., None]  # batch indices
         return torch.cat([boxes[i, index // nc], scores[..., None], (index % nc)[..., None].float()], dim=-1)
+
+
+class CountingDetect(Detect):
+    """Detection-compatible head used by text-guided object counting.
+
+    Counting remains a post-processing operation over NMS-filtered detections. This
+    task-specific wrapper intentionally inherits ``Detect`` without changing its
+    forward path, tensor layout, loss contract, or pretrained parameter names.
+    """
+
+    task_name = "counting"
 
 
 class Segment(Detect):
