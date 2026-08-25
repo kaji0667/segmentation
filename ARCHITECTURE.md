@@ -161,3 +161,9 @@ ADR-0016 evaluated a dedicated P2 residual on top of the active semantic-role po
 The seed-42 run `runs/semseg/p2ubr_axis` stopped at epoch 52 and selected raw-best epoch 44 with threshold `0.80`. Full test results were `oIoU=0.694145`, `mIoU=0.535108`, and `Pr@0.5-0.9=0.593795/0.510773/0.404194/0.300201/0.151681`. Relative to `srp_axis`, both primary IoU metrics, Pr@0.5-0.8, Precision, Recall, and F1 regressed; only Pr@0.9 improved by `0.000575`.
 
 The residual last-layer weight norm was `1.011367`, and the complete test mask covered `1.9474%` of pixels on average, confirming that the P2 path learned and obeyed the boundary-only constraint. It nevertheless added `749,057` parameters and increased mean evaluation time from `28.95` to `86.04 ms/sample` and peak GPU memory from `339.31` to `558.66 MB`. The candidate is rejected; its active source/config/test are removed, while the local run and ADR retain the negative evidence.
+
+## Referring-Segmentation Task Execution
+
+`HFSA-main/scripts/train_refseg.sh` is the task-level training wrapper. It locates `HFSA-main`, changes to that directory, and invokes the accepted `run_semseg_preset.sh baseline` path with YOLOv12m, RRSIS-D, batch 4, 60 epochs, patience 8, and test-after-train defaults. Environment variables and trailing CLI arguments may override those defaults.
+
+`HFSA-main/scripts/test_refseg.sh` is the independent evaluation wrapper. It invokes `train_semseg.py --eval-only --checkpoint ...`, builds only the official test dataset/cache/loader, strictly loads the full checkpoint, reuses the checkpoint's stored validation threshold, and writes to a separate evaluation directory. It does not build the train or validation datasets and does not load YOLO pretraining weights. All wrapper paths are repository-relative; no machine-specific drive or `/mnt` path is embedded.

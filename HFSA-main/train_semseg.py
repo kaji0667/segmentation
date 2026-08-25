@@ -72,6 +72,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-batches", type=int, default=2, help="Stop each epoch after this many train batches; 0 means full epoch.")
     parser.add_argument("--max-val-batches", type=int, default=2, help="Stop validation after this many batches; 0 means full validation.")
     parser.add_argument("--test-after-train", action="store_true", help="Evaluate the best checkpoint on the test split using the validation-selected threshold.")
+    parser.add_argument("--eval-only", action="store_true", help="Evaluate an existing full checkpoint without building the train/val datasets.")
+    parser.add_argument("--checkpoint", type=str, default="", help="Full semantic-segmentation checkpoint used by --eval-only.")
     parser.add_argument("--max-test-batches", type=int, default=0, help="Stop test evaluation after this many batches; 0 means full test split.")
     parser.add_argument("--print-interval", type=int, default=10, help="Print train progress every N batches.")
     parser.add_argument("--save-dir", type=str, default="runs/semseg/train", help="Directory for run artifacts.")
@@ -126,6 +128,21 @@ def resolve_existing_path(path: str | Path) -> Optional[Path]:
         if wsl_candidate.exists():
             return wsl_candidate
     return None
+
+
+def resolve_checkpoint_path(path: str | Path) -> Path:
+    """Resolve a checkpoint from the caller's CWD, then from the HFSA-main directory."""
+    resolved = resolve_existing_path(path)
+    if resolved is not None:
+        return resolved.resolve()
+
+    candidate = Path(path).expanduser()
+    if not candidate.is_absolute():
+        project_candidate = Path(__file__).resolve().parent / candidate
+        if project_candidate.exists():
+            return project_candidate.resolve()
+
+    raise FileNotFoundError(f"Checkpoint not found: {path}")
 
 
 def resolve_data_root(data: Dict[str, Any]) -> Path:
@@ -1028,6 +1045,13 @@ def build_summary_writer(save_dir: Path, disabled: bool):
 
 def main() -> None:
     args = parse_args()
+    if args.eval_only:
+        if not args.checkpoint:
+            raise ValueError("--eval-only requires --checkpoint.")
+        args.epochs = 0
+        args.test_after_train = True
+        args.no_val = True
+        args.no_tensorboard = True
     set_random_seed(args.seed, args.deterministic)
     val_thresholds = parse_val_thresholds(args.val_thresholds)
     data = yaml_load(args.data)
@@ -1053,21 +1077,27 @@ def main() -> None:
     if args.test_after_train and args.nosave:
         raise ValueError("--test-after-train requires checkpoint saving; remove --nosave.")
 
-    train_jsonl = resolve_split_path(data, "train")
-    val_jsonl = resolve_split_path(data, "val") if "val" in data and not args.no_val else None
+    train_jsonl = None if args.eval_only else resolve_split_path(data, "train")
+    val_jsonl = resolve_split_path(data, "val") if "val" in data and not args.no_val and not args.eval_only else None
     test_jsonl = resolve_split_path(data, "test") if args.test_after_train and "test" in data else None
-    split_paths = {"train": train_jsonl}
+    split_paths = {}
+    if train_jsonl:
+        split_paths["train"] = train_jsonl
     if val_jsonl:
         split_paths["val"] = val_jsonl
     if test_jsonl:
         split_paths["test"] = test_jsonl
     text_embedding_paths = build_rrsisd_text_embedding_cache(args, data, split_paths, device)
-    train_set = build_semseg_dataset(
-        data,
-        train_jsonl,
-        args,
-        "train",
-        text_embedding_file=text_embedding_paths.get("train"),
+    train_set = (
+        build_semseg_dataset(
+            data,
+            train_jsonl,
+            args,
+            "train",
+            text_embedding_file=text_embedding_paths.get("train"),
+        )
+        if train_jsonl
+        else None
     )
     val_set = (
         build_semseg_dataset(
@@ -1095,18 +1125,22 @@ def main() -> None:
     data_generator.manual_seed(int(args.seed))
     train_sampler = (
         build_text_query_sampler(train_set, args.small_target_boost, args.small_target_area, generator=data_generator)
-        if args.text_queries
+        if args.text_queries and train_set is not None
         else None
     )
-    train_loader = DataLoader(
-        train_set,
-        batch_size=args.batch,
-        shuffle=train_sampler is None,
-        sampler=train_sampler,
-        num_workers=args.workers,
-        pin_memory=device.type == "cuda",
-        worker_init_fn=seed_worker,
-        generator=data_generator,
+    train_loader = (
+        DataLoader(
+            train_set,
+            batch_size=args.batch,
+            shuffle=train_sampler is None,
+            sampler=train_sampler,
+            num_workers=args.workers,
+            pin_memory=device.type == "cuda",
+            worker_init_fn=seed_worker,
+            generator=data_generator,
+        )
+        if train_set is not None
+        else None
     )
     val_loader = (
         DataLoader(
@@ -1142,19 +1176,27 @@ def main() -> None:
 
     writer = build_summary_writer(save_dir, args.no_tensorboard or args.nosave)
     model = SemanticSegmentationModel(args.model, ch=3, nc=nc, verbose=False).to(device)
-    load_pretrained_backbone(model, args.weights, device)
+    if not args.eval_only:
+        load_pretrained_backbone(model, args.weights, device)
     model.loss_pos_weight_max = float(args.pos_weight_max)
     model.loss_small_target_weight = float(args.loss_small_target_weight)
     model.loss_small_target_area = float(args.loss_small_target_area)
     model.loss_tversky_fp_weight = float(args.loss_tversky_fp_weight)
     model.loss_fp_weight = float(args.loss_fp_weight)
     trainable_params = configure_trainable_layers(model, args)
-    if trainable_params <= 0:
+    if trainable_params <= 0 and not args.eval_only:
         raise RuntimeError("No trainable parameters remain after applying freeze options.")
-    model.train()
-    optimizer = torch.optim.AdamW((p for p in model.parameters() if p.requires_grad), lr=args.lr, weight_decay=args.weight_decay)
+    if args.eval_only:
+        model.eval()
+    else:
+        model.train()
+    optimizer = (
+        None
+        if args.eval_only
+        else torch.optim.AdamW((p for p in model.parameters() if p.requires_grad), lr=args.lr, weight_decay=args.weight_decay)
+    )
     scheduler = None
-    if args.scheduler == "cosine":
+    if args.scheduler == "cosine" and optimizer is not None:
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
             T_max=max(int(args.epochs), 1),
@@ -1164,11 +1206,14 @@ def main() -> None:
 
     print(f"data: {args.data}")
     print(f"dataset_type: {dtype}")
-    print(f"train samples: {len(train_set)}")
+    print(f"mode: {'evaluation only' if args.eval_only else 'training'}")
+    print(f"train samples: {len(train_set) if train_set is not None else 0}")
     print(f"val samples: {len(val_set) if val_set is not None else 0}")
     print(f"test samples: {len(test_set) if test_set is not None else 0}")
     print(f"classes: {nc}")
-    print(f"weights: {args.weights or '<none>'}")
+    print(f"weights: {'<not loaded in eval-only mode>' if args.eval_only else (args.weights or '<none>')}")
+    if args.eval_only:
+        print(f"checkpoint: {args.checkpoint}")
     print(f"text queries: {args.text_queries}")
     print(f"text encoder: {args.text_encoder}")
     print(f"device: {device}")
@@ -1409,12 +1454,16 @@ def main() -> None:
             break
 
     if test_loader is not None:
-        test_checkpoint_path = select_test_checkpoint(weights_dir)
+        test_checkpoint_path = (
+            resolve_checkpoint_path(args.checkpoint) if args.eval_only else select_test_checkpoint(weights_dir)
+        )
         if not test_checkpoint_path.exists():
             raise FileNotFoundError(f"Cannot run test evaluation without best checkpoint: {test_checkpoint_path}")
         checkpoint = torch.load(test_checkpoint_path, map_location=device, weights_only=False)
         model.load_state_dict(checkpoint["model"], strict=True)
         checkpoint_metrics = checkpoint.get("metrics", {})
+        checkpoint_args = checkpoint.get("args", {})
+        checkpoint_selection_metric = str(checkpoint_args.get("val_select_metric", args.val_select_metric))
         test_threshold = float(checkpoint_metrics.get("best_threshold", val_thresholds[0]))
         if not np.isfinite(test_threshold):
             test_threshold = float(val_thresholds[0])
@@ -1446,11 +1495,15 @@ def main() -> None:
             "split": "test",
             "checkpoint": str(test_checkpoint_path),
             "checkpoint_epoch": int(checkpoint.get("epoch", 0)),
-            "checkpoint_selection_metric": args.val_select_metric,
+            "checkpoint_selection_metric": checkpoint_selection_metric,
             "threshold_source": (
-                "raw-best validation checkpoint"
-                if test_checkpoint_path.name == "best_raw.pt"
-                else "legacy best validation checkpoint"
+                "explicit checkpoint validation threshold"
+                if args.eval_only
+                else (
+                    "raw-best validation checkpoint"
+                    if test_checkpoint_path.name == "best_raw.pt"
+                    else "legacy best validation checkpoint"
+                )
             ),
             "threshold": test_threshold,
             "evaluated_samples": int(test_metrics["evaluated_samples"]),

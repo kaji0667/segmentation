@@ -877,3 +877,16 @@ Status:
 - Relative to YOLOv12n `srp_axis`, mIoU improved `+0.013540` and all Pr metrics improved, while oIoU `+0.000181` and F1 `+0.000125` were effectively unchanged; Recall decreased `0.005875`.
 - Parameters/checkpoint/peak test GPU changed from `4.07M/36.72 MB/339.31 MB` to `20.29M/150.33 MB/726.26 MB`.
 - Decision: retain YOLOv12m as an accuracy-oriented candidate, but do not call it the comprehensive resource-efficient optimum without a deployment-priority decision and paired latency benchmark.
+
+## 2026-08-25: Add Project-Relative Referring-Segmentation Scripts
+
+Scope:
+- Added `scripts/train_refseg.sh` for the accepted YOLOv12m/RRSIS-D training preset and `scripts/test_refseg.sh` for independent checkpoint evaluation.
+- Added `train_semseg.py --eval-only --checkpoint` so testing skips train/val dataset construction and pretrained initialization, strictly reloads the requested full checkpoint, and preserves its validation-selected threshold.
+- Kept backbone, neck, OpenCLIP, segmentation head, loss, data semantics, and training hyperparameters unchanged.
+
+Verification:
+- `bash -n` passed for both Shell scripts in the publication and working copies.
+- Python compilation and all 24 repository tests passed in both copies.
+- A 2-batch CUDA evaluation-only smoke loaded `srp_yolov12m_axis/weights/best_raw.pt`, reported `train samples: 0`, `val samples: 0`, `test samples: 3481`, reused threshold `0.70`, and wrote a separate `test_results.json` under `runs/semseg/srp_yolov12m_axis_eval_smoke_scripts`.
+- Normalized SHA-256 hashes match between publication and working copies for `train_semseg.py`, both scripts, the script README, and the directed test.

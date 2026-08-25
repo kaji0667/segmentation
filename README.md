@@ -11,6 +11,8 @@ This repository contains the code needed for the HFSA text-guided remote-sensing
 - `HFSA-main/ultralytics/cfg/models/v12/yolov12-semseg.yaml`: main non-P2 segmentation model.
 - `HFSA-main/ultralytics/cfg/models/v12/yolov12-semseg-p2.yaml`: experimental P2 model.
 - `HFSA-main/run_semseg_preset.sh`: reusable training presets.
+- `HFSA-main/scripts/train_refseg.sh`: project-relative YOLOv12m training entry for the referring-segmentation task.
+- `HFSA-main/scripts/test_refseg.sh`: evaluation-only entry for an existing referring-segmentation checkpoint.
 - Project notes: `ARCHITECTURE.md`, `DEVELOPMENT_LOG.md`, `THREAD_CHANGE_LOG.md`, `PROJECT_RULES.md`, `LITERATURE_READING_GUIDE.md`.
 
 ## Excluded
@@ -41,6 +43,15 @@ After preparing the RRSIS-D dataset locally, place `yolov12m.pt` at `HFSA-main/p
 ```bash
 bash run_semseg_preset.sh baseline
 ```
+
+The task-specific wrappers locate `HFSA-main` automatically, so they may be called through an absolute or relative script path from any working directory:
+
+```bash
+bash HFSA-main/scripts/train_refseg.sh
+bash HFSA-main/scripts/test_refseg.sh
+```
+
+The second command evaluates `runs/semseg/srp_yolov12m_axis/weights/best_raw.pt` by default and writes to the separate `runs/semseg/srp_yolov12m_axis_eval` directory without retraining. See `HFSA-main/scripts/README.md` for environment-variable overrides.
 
 To evaluate the best validation checkpoint on the official test split with the validation-selected threshold frozen:
 

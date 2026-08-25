@@ -190,3 +190,10 @@
 - 正式运行第 52 轮早停，raw-best 为第 44 轮、冻结阈值 `0.70`；test `oIoU=0.701171`、`mIoU=0.552562`，Pr@0.5-0.9 全部高于 n-scale `srp_axis`。
 - mIoU 提升 `0.013540`，但 oIoU 与 F1 基本持平；模型参数、checkpoint 和峰值 test GPU 分别约为 n-scale 的 `4.98x/4.09x/2.14x`。
 - 结论：YOLOv12m 是准确率优先候选，不是已证明的资源效率综合最优；默认 m-scale 按用户要求保留，最终提交需明确准确率与星载部署效率优先级。
+
+### 27. 新增指代语义分割独立训练/测试脚本
+- 新增 `HFSA-main/scripts/train_refseg.sh`，统一调用原有 `run_semseg_preset.sh baseline`，默认使用 YOLOv12m、RRSIS-D、batch 4、60 epochs、patience 8，并在训练完成后测试。
+- 新增 `HFSA-main/scripts/test_refseg.sh`，默认读取 `runs/semseg/srp_yolov12m_axis/weights/best_raw.pt`，输出到独立的 `runs/semseg/srp_yolov12m_axis_eval`，不会重新训练或覆盖原训练目录。
+- `train_semseg.py` 新增 `--eval-only --checkpoint`：只构建 test split，严格加载完整 checkpoint，并复用其中保存的验证阈值。
+- 两个脚本都通过脚本自身位置定位 `HFSA-main`，数据、模型、权重和输出全部使用项目相对路径，无本机盘符或 `/mnt` 硬编码。
+- 两份代码均通过 Shell 语法检查、Python 编译、24 项全库测试；2-batch CUDA 只评测 smoke 成功，确认 train/val 样本数均为 0、test 为 3481。
