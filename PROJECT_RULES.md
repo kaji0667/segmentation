@@ -376,6 +376,10 @@ Proposed / Accepted / Superseded
 - 如果最终需要统一 `train.py`，它只能作为薄任务分发器：解析任务编号或名称并调用对应 Trainer，不得在分发器中复制或混合各任务的数据、Loss、训练循环和指标实现。
 - 最终用户输入编号或任务名称后的自动切换属于统一推理入口，与训练脚本分离设计；训练阶段仍按任务、数据集和 checkpoint 独立运行。
 - 在所有单任务训练/测试入口完成审计和 smoke 前，不启动联合多数据集、多 Head 同时训练。
+- 已接入的指代分割、场景分类和目标计数任务统一放在 `HFSA-main/tasks/<task>/`；根目录 `train_<task>.py`、`test_<task>.py` 只能作为薄入口，不承载任务内部训练、评测或推理实现。
+- 指代分割正式入口为 `train_refseg.py` 与 `test_refseg.py`；`train_semseg.py` 只作为历史命令兼容层，不得重新堆入业务逻辑。
+- 任务包只统一边界和依赖方向，不强制拥有完全相同的文件。自定义训练循环可以拥有专用 checkpoint 管理器；使用 Ultralytics Trainer 的任务继续复用框架 checkpoint，不建立无意义空模块。
+- 目标检测 `train.py`、`val.py` 与 `text_encoder/` 在用户明确安排其重构前保持原状，不因其他任务的目录统一而顺带移动。
 - 队友或外部任务仓库只允许作为临时审计输入；完成 Head、Loss、数据、Trainer、推理和评测接入后，最终活动目录与发布仓库不得保留其完整源码快照、嵌套 Git 或运行时依赖。算法来源以 ADR 中的仓库地址和 commit 记录追溯。
 - 结构实验必须以当前最好基线为对照，保持数据 split、seed、训练参数和验证口径一致，并优先采用单变量改动。
 - P2 直接融合、三路 token gate 和 simple decoder 已有未超过基线的实验记录；除非提出可验证的新机制，否则不重复作为默认改进路线。
@@ -458,6 +462,13 @@ Proposed / Accepted / Superseded
 - 统一训练入口若需要实现，只承担任务分发；统一推理入口与训练入口分离。
 - 明确分割训练脚本不得依赖部署时不会携带的 `run_semseg_preset.sh`，所有任务脚本必须使用项目相对路径。
 - 将 `CURRENT_STATE.md` 纳入每个新对话的必读文档，用于维护当前状态和下一步；历史过程继续写入 `DEVELOPMENT_LOG.md` 与 `THREAD_CHANGE_LOG.md`。
+
+### 2026-08-26 三任务包目录统一补充
+
+- 指代分割、场景分类和目标计数统一迁入 `HFSA-main/tasks/`，根目录 Python 文件只保留薄训练/测试入口。
+- 指代分割新增独立 `train_refseg.py`、`test_refseg.py`；旧 `train_semseg.py` 保留为兼容转发。
+- 指代分割完整恢复逻辑归入 `RefSegCheckpointManager`；分类使用自身 Head checkpoint，计数复用 Ultralytics 检测 checkpoint，禁止为了目录对称制造无用实现。
+- 本次目录统一明确不涉及目标检测，后续只有在用户单独确认后才处理 `train.py`、`val.py` 与 `text_encoder/`。
 
 ## 追加说明：跨线程上下文补充
 

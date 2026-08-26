@@ -20,7 +20,7 @@ if [[ "${TEST_AFTER_TRAIN:-1}" == "1" ]]; then
   )
 fi
 
-exec "$PYTHON_BIN" train_semseg.py \
+exec "$PYTHON_BIN" train_refseg.py \
   --data "${DATA:-pre_datasets/RRSIS-D_refseg/data.yaml}" \
   --model "${MODEL:-ultralytics/cfg/models/v12/yolov12m-semseg.yaml}" \
   --weights "${WEIGHTS:-pretrain_model/yolov12m.pt}" \

@@ -231,6 +231,16 @@
 - 场景分类参考来源固定为 `zhuoletian-collab/changjingfenlei@688c2a9`；发布时只带可审计源码和 provenance，不带嵌套 Git、checkpoint、数据、runs、缓存或个人配置。
 - 分类 CPU 最小训练/测试 smoke 已通过；真实完整训练和 GPU smoke 未执行。
 
+### 32. 统一三个非检测任务的目录与入口
+
+- 新建 `HFSA-main/tasks/`，指代分割、场景分类和目标计数分别迁入 `tasks/refseg/`、`tasks/classification/`、`tasks/counting/`；原根目录 `classification/`、`counting/` 源码目录不再存在。
+- 六个根目录训练/测试 Python 文件统一为薄入口；Application、数据、训练、评测、推理和指标类位于对应任务包。
+- 指代分割新增真正独立的 `train_refseg.py` 和 `test_refseg.py`；`train_semseg.py` 只保留历史兼容转发。
+- 原分割 checkpoint 保存与恢复函数包装为 `RefSegCheckpointManager`。它负责自定义训练循环的 optimizer、scheduler、early-stop、阈值、RNG 和 CSV 恢复；分类和计数继续使用各自原有 checkpoint 机制。
+- 目标检测 `train.py`、`val.py`、`text_encoder/` 未修改，也未新增 `tasks/detection/`。
+- 分类 `8/8`、计数 `6/6`、分割入口 `5/5`、checkpoint `7/7`、目录结构 `3/3` 均通过；活动与发布副本最终全量 CPU 回归均为 `51/51`。
+- 新入口真实 CPU smoke：分割严格加载原 `best_raw.pt` 评测 1 batch；分类严格加载原 `best.pt` 评测 1 batch。计数仍因没有真实数据和训练 checkpoint 无法执行真实 smoke。
+
 ### 32. 场景分类整合复核与活动副本最终同步
 
 - 独立复核 `SceneClassifyHead`、m-scale YAML、冻结权重加载、ImageFolder/VRSBench 数据、训练、评测和 checkpoint 契约，确认保持队友 P3/P4/P5 空间注意力 + GeM 主逻辑。

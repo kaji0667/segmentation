@@ -8,7 +8,7 @@ HFSA targets multimodal remote-sensing interpretation. The current personal bran
 
 - Input: one remote-sensing image and one free-text referring expression.
 - Output: one binary mask for the referred target.
-- Main training entry: `HFSA-main/train_semseg.py`.
+- Main entries: `HFSA-main/train_refseg.py` and `HFSA-main/test_refseg.py`; `train_semseg.py` is a compatibility wrapper.
 - Dataset adapter: `HFSA-main/dataset/rrsisd_refseg_dataset.py`.
 - Main model config: the shared `HFSA-main/ultralytics/cfg/models/v12/yolov12-semseg.yaml`, invoked through the standard `yolov12m-semseg.yaml` scale alias.
 
@@ -19,14 +19,14 @@ The project baseline and core YOLO/OpenCLIP code were mostly completed by the se
 - Data layer: parses RRSIS-D referring segmentation metadata, reads images, decodes binary masks, loads cached text embeddings, and applies train-only lightweight augmentation.
 - Text embedding layer: uses cached OpenCLIP text vectors, currently expected to match `text_dim=768`.
 - Model layer: uses YOLOv12 backbone/neck with a text-guided segmentation head through `TextPromptSegment`.
-- Training layer: `train_semseg.py` builds datasets, samplers, model, loss, metrics, checkpoints, plots, and run artifacts.
+- Task layer: `tasks/refseg/engine.py` builds datasets, samplers, model, loss, metrics, plots, and run artifacts; `tasks/refseg/checkpoint.py` owns restartable checkpoint policy.
 - Experiment artifacts: `HFSA-main/runs/` stores training results and should not be treated as source code.
 
 ## Dependency Direction
 
 Allowed:
 
-- `train_semseg.py` depends on dataset adapters, model config, Ultralytics model construction, and cached text embeddings.
+- `tasks/refseg/engine.py` depends on dataset adapters, model config, Ultralytics model construction, cached text embeddings, and `RefSegCheckpointManager`.
 - Dataset adapters depend on standard libraries, NumPy, PyTorch, OpenCV/Pillow fallback, and metadata files.
 - The segmentation branch may add training options, sampling policy, metrics, and segmentation-head integration logic.
 
@@ -59,7 +59,7 @@ Restricted:
 - Validation loss and IoU can diverge because BCE/Dice-style losses and thresholded mask IoU optimize different surfaces.
 - RRSIS-D weak classes observed in recent experiments include vehicle, harbor, windmill, and tenniscourt.
 - Text-guided spatial relationships remain a hard case because global text vectors have limited token-level grounding.
-- `train_semseg.py` still concentrates many responsibilities and should be split only after the current experimental baseline is stable.
+- `tasks/refseg/engine.py` still concentrates data construction, metrics, visualization, and the training loop; checkpoint policy and public applications have been split out, while further extraction remains incremental technical debt.
 - Git repository state is currently abnormal: `git status` reports that the current root is not recognized as a Git repository despite `.git` directories being present.
 
 ## Recent Architecture Decision Status
@@ -164,9 +164,9 @@ The residual last-layer weight norm was `1.011367`, and the complete test mask c
 
 ## Referring-Segmentation Task Execution
 
-`HFSA-main/scripts/train_refseg.sh` is the self-contained task-level training wrapper. It locates `HFSA-main`, changes to that directory, and directly invokes `train_semseg.py` with the accepted baseline parameters: YOLOv12m, RRSIS-D, batch 4, 60 epochs, patience 8, and test-after-train by default. It embeds the required arguments and has no runtime dependency on `run_semseg_preset.sh`; environment variables and trailing CLI arguments may override the defaults.
+`HFSA-main/scripts/train_refseg.sh` is the self-contained task-level training wrapper. It locates `HFSA-main`, changes to that directory, and invokes the thin `train_refseg.py` entry with the accepted baseline parameters: YOLOv12m, RRSIS-D, batch 4, 60 epochs, patience 8, and test-after-train by default. It embeds the required arguments and has no runtime dependency on `run_semseg_preset.sh`; environment variables and trailing CLI arguments may override the defaults.
 
-`HFSA-main/scripts/test_refseg.sh` is the independent evaluation wrapper. It invokes `train_semseg.py --eval-only --checkpoint ...`, builds only the official test dataset/cache/loader, strictly loads the full checkpoint, reuses the checkpoint's stored validation threshold, and writes to a separate evaluation directory. It does not build the train or validation datasets and does not load YOLO pretraining weights. All wrapper paths are repository-relative; no machine-specific drive or `/mnt` path is embedded.
+`HFSA-main/scripts/test_refseg.sh` is the independent evaluation wrapper. It invokes `test_refseg.py --checkpoint ...`; `RefSegEvaluationApplication` supplies evaluation-only mode, builds only the official test dataset/cache/loader, strictly loads the full checkpoint, reuses the checkpoint's stored validation threshold, and writes to a separate evaluation directory. It does not build the train or validation datasets and does not load YOLO pretraining weights. All wrapper paths are repository-relative; no machine-specific drive or `/mnt` path is embedded.
 
 ## RRSIS-D Validation and Empty-Mask Cleaning
 
@@ -178,7 +178,7 @@ The resize path remains bilinear for images and nearest-neighbor for masks: the 
 
 ## Multi-Task Training and Inference Routing
 
-ADR-0020 fixes the integration boundary at a shared YOLOv12m Backbone/Neck plus task-specific Heads, Trainers, datasets, losses, checkpoints, and evaluators. Detection continues to use its Ultralytics text-guided detection pipeline, while referring segmentation continues to use `train_semseg.py`; counting and classification must first expose equivalent task-level interfaces before integration.
+ADR-0020 and ADR-0023 fix the integration boundary at a shared YOLOv12m Backbone/Neck plus task-specific Heads, Trainers, datasets, losses, checkpoints, and evaluators. Referring segmentation, counting, and classification now live under `HFSA-main/tasks/` with thin root entries. Detection intentionally continues to use its existing `train.py`, `val.py`, and `text_encoder/` pipeline and was not reorganized in this change.
 
 Each task owns self-contained `scripts/train_<task>.sh` and `scripts/test_<task>.sh` wrappers. A future common `train.py` may parse a task name or number and dispatch to the corresponding Trainer, but it must not become a combined task implementation. The final interactive task switch is a separate inference router that selects the task configuration, Head, checkpoint, preprocessing, and postprocessing. This decision does not authorize joint multi-dataset or simultaneous multi-Head training.
 
@@ -215,7 +215,20 @@ The current evaluator intentionally preserves the teammate's positive-query VOC 
 - 场景分类继续复用统一 YOLOv12m Backbone/Neck 的 P3/P4/P5，不修改共享特征网络。
 - 最终 Head 为 `SceneClassifyHead`：每个尺度独立 `1x1 Conv + BN + ReLU` 投影，同时执行可学习空间注意力池化和 GeM，拼接三尺度结果后进入三层 MLP，输出 `[B, num_classes]` logits。
 - `ultralytics/cfg/models/v12/yolov12-classification.yaml` 定义共享 Backbone/Neck 与独立分类 Head；`parse_model()` 注入三尺度通道，`guess_model_task()` 识别为 `classify`。
-- `classification/` 按职责拆分配置、ImageFolder 数据、VRSBench 单场景筛选、模型、指标、训练、评测和推理。分类 checkpoint 保存 Head 状态、类别顺序、模型 YAML、预训练匹配报告和配置；Backbone/Neck 继续从团队 `yolov12m.pt` 加载并冻结。
+- `tasks/classification/` 按职责拆分配置、ImageFolder 数据、VRSBench 单场景筛选、模型、指标、训练、评测和推理。分类 checkpoint 保存 Head 状态、类别顺序、模型 YAML、预训练匹配报告和配置；Backbone/Neck 继续从团队 `yolov12m.pt` 加载并冻结。
+
+## 2026-08-26 Integrated Task-Package Layout
+
+The three tasks currently in integration scope use the same outer dependency shape:
+
+```text
+scripts/train_<task>.sh or scripts/test_<task>.sh
+-> thin root train_<task>.py or test_<task>.py
+-> tasks/<task>/ application and engine classes
+-> task-specific Head/Loss in the shared Ultralytics fork
+```
+
+`tasks/refseg/checkpoint.py` is intentionally unique because the custom referring-segmentation loop owns optimizer, scheduler, early-stopping, validation-threshold, RNG, and CSV recovery. Classification stores a Head-only checkpoint in its trainer. Counting uses the existing Ultralytics detection checkpoint contract. File-name symmetry is not required when the task framework owns different responsibilities.
 - `SceneClassificationLoss` 位于统一 `ultralytics/utils/loss.py`，封装原单标签 CrossEntropy；Trainer 和 Evaluator 均调用该任务 Loss 类，不依赖上游训练脚本。
 - 推理预处理可通过 `SceneDataModule.build_transform()` 独立构建，因此单图 Top-K 不依赖数据集目录；`split=all` 在显式 train/val/test 布局下合并各 split 并校验类别顺序。训练保持原 Head 的 BatchNorm 结构，并避免产生末尾单样本 batch。
 - 分类、计数和指代分割保持独立 Trainer、Loss、数据与评测协议；本次未修改 OpenCLIP、`TextPromptSegment` 或现有分割/计数训练链路。

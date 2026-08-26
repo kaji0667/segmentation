@@ -4,7 +4,7 @@
 
 ## 指代语义分割
 
-训练脚本已经内置当前正式 baseline 的全部参数，直接调用 `train_semseg.py`，不依赖 `run_semseg_preset.sh`。
+训练脚本已经内置当前正式 baseline 的全部参数，直接调用 `train_refseg.py`，不依赖 `run_semseg_preset.sh`。独立评测调用 `test_refseg.py`；旧 `train_semseg.py` 仅保留为兼容入口。
 
 训练并在训练完成后测试：
 
@@ -25,7 +25,7 @@ DEVICE=cuda:0 BATCH=8 EPOCHS=80 bash scripts/train_refseg.sh
 CHECKPOINT=runs/semseg/other/weights/best_raw.pt SAVE_DIR=runs/semseg/other_eval bash scripts/test_refseg.sh
 ```
 
-还可在命令末尾追加 `train_semseg.py` 参数；末尾参数优先级最高。
+还可在命令末尾追加 `train_refseg.py` 参数；末尾参数优先级最高。
 
 ## 目标计数
 

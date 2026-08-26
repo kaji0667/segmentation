@@ -2,6 +2,15 @@
 
 最后更新：2026-08-26
 
+## 2026-08-26 最新状态：三个非检测任务统一进入 `tasks/`
+
+- 指代分割、场景分类和目标计数现统一位于 `HFSA-main/tasks/refseg/`、`tasks/classification/`、`tasks/counting/`；原根目录 `classification/`、`counting/` 源码目录已移除。
+- 三项任务均采用独立薄入口：`train_refseg.py`/`test_refseg.py`、`train_classification.py`/`test_classification.py`、`train_counting.py`/`test_counting.py`。Shell 脚本已调用这些入口。
+- 旧 `train_semseg.py` 只保留兼容转发和历史 helper 导出；实际指代分割实现位于 `tasks/refseg/engine.py`。
+- 分割 checkpoint 保存、raw-best 选择、resume 协议、RNG 和 CSV 恢复包装为 `tasks/refseg/checkpoint.py::RefSegCheckpointManager`。分类仍由自身 Trainer 保存 Head checkpoint；计数仍复用 Ultralytics 检测 checkpoint。
+- 目标检测 `train.py`、`val.py` 和 `text_encoder/` 本次没有修改，也没有建立 `tasks/detection/`。
+- 发布副本与活动副本变更文件哈希一致；两边最终全量 CPU 回归均为 `51/51`。新入口真实 CPU smoke 已完成：分割 1 个 test batch、分类 1 个 test batch；计数因缺少真实数据和训练 checkpoint 仍以静态构建与专项回归为验证边界。
+
 ## 2026-08-26 最新状态：场景分类接入复核完成
 
 - `srp_yolov12m_axis_clean_empty` 已在 epoch 39 早停，raw-best epoch 31、阈值 `0.80`；完整 cleaned test 为 `oIoU=0.693618`、`mIoU=0.539086`。
@@ -24,7 +33,7 @@
 - `HFSA-main/scripts/train_refseg.sh` 是自包含训练脚本，直接调用 `train_semseg.py`，内置当前正式 YOLOv12m baseline 参数，不依赖部署时不会携带的 `run_semseg_preset.sh`。
 - 训练脚本通过自身位置定位 `HFSA-main`；数据、模型、权重和输出均使用项目相对路径，并允许通过环境变量或末尾 CLI 参数覆盖。
 - `HFSA-main/scripts/test_refseg.sh` 支持已有 checkpoint 的独立测试，默认输出到单独目录，不重新训练，也不覆盖原训练目录。
-- `train_semseg.py` 已支持 `--eval-only --checkpoint`：只构建 test split，严格加载完整 checkpoint，并复用 checkpoint 中冻结的 validation 阈值与选模指标。
+- 正式独立测试入口为 `test_refseg.py`；兼容层 `train_semseg.py --eval-only --checkpoint` 仍可使用。两者都只构建 test split，严格加载完整 checkpoint，并复用 checkpoint 中冻结的 validation 阈值与选模指标。
 - 该封装通过 Shell 语法检查、参数展开检查、Python 编译、全库测试和 2-batch CUDA evaluation-only smoke。
 
 ## 当前数据协议
@@ -50,7 +59,7 @@
 
 ## 其他成员代码状态
 
-- 队友目标计数代码已完成第一阶段任务化接入：新增不改变 `Detect` 行为的 `CountingDetect` Head、`yolov12m-counting.yaml`、类化 counting 包、`train_counting.py`、`test_counting.py` 和自包含训练/测试脚本。
+- 队友目标计数代码已完成任务化接入：新增不改变 `Detect` 行为的 `CountingDetect` Head、`yolov12m-counting.yaml`、`tasks/counting/` 类化任务包、薄训练/测试入口和自包含脚本。
 - 计数仍采用原有“文本引导类无关检测 -> NMS -> 检测框数”逻辑，不引入密度图、计数回归 Head 或新 Loss；共享 YOLOv12m Backbone/Neck、OpenCLIP 和文本引导检测 Trainer。
 - 计数评测当前明确保持队友的 positive-query VOC 协议，只查询 XML 中实际存在的类别，报告 EM、MAE、RMSE 与逐类别统计；不得把它表述为包含零计数问答的完整协议。
 - 队友仓库未提供训练 checkpoint，本地也未完成 VRSBench 真实数据 smoke；当前验证范围为语法、参数展开、Head 等价性、模型构建和预训练权重静态加载。

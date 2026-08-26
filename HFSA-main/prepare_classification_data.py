@@ -3,7 +3,7 @@
 import argparse
 import json
 
-from classification import VRSBenchSceneDatasetBuilder
+from tasks.classification import VRSBenchSceneDatasetBuilder
 
 
 def main():

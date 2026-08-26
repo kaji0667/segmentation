@@ -972,6 +972,33 @@ Limitations:
 - 分类 CPU smoke：从现有 VRSBench 生成 21 类、每类 2 张硬链接样本；batch 2、imgsz 64、1 train/1 val batch 成功，随后 1 test batch 成功并生成 `runs/smoke/classification_eval/test_results.json`。smoke 指标不用于效果结论。
 - GPU 当前被其他桌面/WSL 进程占用约 3.1 GB，未启动新的 GPU smoke 或长周期训练。
 
+## 2026-08-26: Unify RefSeg, Classification, and Counting Task Packages
+
+Scope:
+- Created `HFSA-main/tasks/` and moved the integrated referring-segmentation, scene-classification, and object-counting implementations under `tasks/refseg/`, `tasks/classification/`, and `tasks/counting/`.
+- Moved classification and counting Application classes into their task packages. The six root `train_<task>.py` / `test_<task>.py` files are now thin dispatchers.
+- Added dedicated `train_refseg.py` and `test_refseg.py`; `train_semseg.py` remains a compatibility wrapper that re-exports historical public helpers.
+- Wrapped referring-segmentation checkpoint save, raw-best selection, resume validation, CSV recovery, and RNG restoration in `RefSegCheckpointManager` under `tasks/refseg/checkpoint.py`.
+- Updated `scripts/train_refseg.sh` and `scripts/test_refseg.sh` to call the dedicated entries. Classification and counting script commands remain stable.
+- Removed the old root `classification/` and `counting/` source directories. Their local cache-only remnants were moved to `tmp/legacy_task_cache_20260826` rather than recursively deleted.
+- Did not modify target-detection `train.py`, `val.py`, `text_encoder/`, Backbone, Neck, OpenCLIP, task Heads, task Loss values, data protocols, or checkpoint tensor formats.
+
+Verification:
+- Scene-classification directed tests: `8/8`.
+- Object-counting directed tests: `6/6`.
+- RefSeg entry tests: `5/5`; checkpoint recovery/selection tests: `7/7`.
+- New task-layout tests: `3/3`.
+- Complete publication CPU regression: `51/51`.
+- Complete active-copy CPU regression: `51/51`.
+- Python compilation passed for all new task packages and thin entries; all six Shell scripts passed syntax and `PYTHON_BIN=echo` command-expansion checks.
+- Real RefSeg CPU smoke used the new `test_refseg.py`, strict-loaded `runs/semseg/srp_yolov12m_axis/weights/best_raw.pt`, evaluated one cleaned test batch at `imgsz=64`, and wrote `runs/smoke/refseg_tasks_layout_20260826/test_results.json`.
+- Real classification CPU smoke used the new `test_classification.py`, strict-loaded `runs/smoke/classification_loss_review_20260826/weights/best.pt`, evaluated one two-sample batch, and wrote `runs/smoke/classification_tasks_layout_20260826_eval/test_results.json`.
+- Counting still has no bundled real VRSBench data or trained task checkpoint; real counting smoke remains unavailable. Static m-scale construction and the six directed tests remain the current evidence boundary.
+
+Decision:
+- Accept ADR-0023. Standardize the three in-scope tasks on thin entries plus task packages, while allowing task-specific files such as RefSeg checkpoint management.
+- Leave target detection unchanged until the user explicitly schedules it as a separate module.
+
 ## 2026-08-26: Review and Harden the Integrated Scene-Classification Task
 
 Scope:

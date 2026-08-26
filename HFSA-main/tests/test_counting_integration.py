@@ -3,8 +3,8 @@ import unittest
 
 import torch
 
-from counting.count_config import CountingTextConfig
-from counting.evaluate import CountingEvaluator
+from tasks.counting.config import CountingTextConfig
+from tasks.counting.evaluation import CountingEvaluator
 from train_counting import CountingTrainingApplication
 from test_counting import CountingEvaluationApplication
 from ultralytics.nn.modules import CountingDetect, Detect

@@ -4,7 +4,7 @@ This repository contains the HFSA task-specific referring-segmentation, object-c
 
 ## Included
 
-- `HFSA-main/train_semseg.py`: training and validation entry point for text-guided binary masks.
+- `HFSA-main/train_refseg.py` and `HFSA-main/test_refseg.py`: dedicated training and evaluation entries for text-guided binary masks; `train_semseg.py` remains a compatibility wrapper.
 - `HFSA-main/dataset/`: RRSIS-D referring segmentation dataset utilities.
 - `HFSA-main/text_encoder/`: text embedding and text-related helper modules.
 - `HFSA-main/ultralytics/`: local Ultralytics/YOLOv12 code with the semantic segmentation head.
@@ -13,8 +13,9 @@ This repository contains the HFSA task-specific referring-segmentation, object-c
 - `HFSA-main/run_semseg_preset.sh`: reusable training presets.
 - `HFSA-main/scripts/train_refseg.sh`: project-relative YOLOv12m training entry for the referring-segmentation task.
 - `HFSA-main/scripts/test_refseg.sh`: evaluation-only entry for an existing referring-segmentation checkpoint.
-- `HFSA-main/counting/`, `train_counting.py`, and `test_counting.py`: text-guided detection-based object counting.
-- `HFSA-main/classification/`, `train_classification.py`, and `test_classification.py`: multi-scale single-label scene classification.
+- `HFSA-main/tasks/counting/`, `train_counting.py`, and `test_counting.py`: text-guided detection-based object counting.
+- `HFSA-main/tasks/classification/`, `train_classification.py`, and `test_classification.py`: multi-scale single-label scene classification.
+- `HFSA-main/tasks/refseg/`: referring-segmentation applications, engine, and restartable checkpoint policy.
 - Project notes: `CURRENT_STATE.md`, `ARCHITECTURE.md`, `DEVELOPMENT_LOG.md`, `THREAD_CHANGE_LOG.md`, `PROJECT_RULES.md`, `LITERATURE_READING_GUIDE.md`.
 
 ## Excluded
@@ -50,7 +51,7 @@ After preparing the RRSIS-D dataset locally, place `yolov12m.pt` at `HFSA-main/p
 bash run_semseg_preset.sh baseline
 ```
 
-The task-specific wrappers locate `HFSA-main` automatically, so they may be called through an absolute or relative script path from any working directory. `train_refseg.sh` embeds the accepted baseline arguments and calls `train_semseg.py` directly; it does not require `run_semseg_preset.sh` in the deployment package:
+The task-specific wrappers locate `HFSA-main` automatically, so they may be called through an absolute or relative script path from any working directory. `train_refseg.sh` embeds the accepted baseline arguments and calls `train_refseg.py` directly; it does not require `run_semseg_preset.sh` in the deployment package:
 
 ```bash
 bash HFSA-main/scripts/train_refseg.sh

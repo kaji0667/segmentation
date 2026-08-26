@@ -33,10 +33,15 @@ class RefSegScriptsTest(unittest.TestCase):
     def test_training_script_is_self_contained(self):
         text = (PROJECT_ROOT / "scripts" / "train_refseg.sh").read_text(encoding="utf-8")
         self.assertNotIn("run_semseg_preset.sh", text)
-        self.assertIn('exec "$PYTHON_BIN" train_semseg.py', text)
+        self.assertIn('exec "$PYTHON_BIN" train_refseg.py', text)
         self.assertIn("--val-select-metric miou", text)
         self.assertIn("--freeze-backbone", text)
         self.assertIn('--empty-mask-policy "${EMPTY_MASK_POLICY:-drop}"', text)
+
+    def test_evaluation_script_uses_the_dedicated_entry(self):
+        text = (PROJECT_ROOT / "scripts" / "test_refseg.sh").read_text(encoding="utf-8")
+        self.assertIn('exec "$PYTHON_BIN" test_refseg.py', text)
+        self.assertNotIn("--eval-only", text)
 
     def test_checkpoint_can_be_resolved_relative_to_project_root(self):
         checkpoint = PROJECT_ROOT / "tests" / "_checkpoint_path_test.pt"

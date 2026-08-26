@@ -10,9 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from classification.metrics import SceneClassificationMetrics
-from classification.data import SceneDataModule
-from classification.prepare import VRSBenchSceneDatasetBuilder
+from tasks.classification.metrics import SceneClassificationMetrics
+from tasks.classification.data import SceneDataModule
+from tasks.classification.prepare import VRSBenchSceneDatasetBuilder
 from ultralytics.nn.modules import SceneClassifyHead
 from ultralytics.nn.tasks import ClassificationModel, guess_model_task
 from ultralytics.utils.loss import SceneClassificationLoss
