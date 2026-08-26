@@ -18,11 +18,8 @@ HFSA-main/runs/
 HFSA-main/pretrain_model/
 HFSA-main/pre_datasets/RRSIS-D_refseg/*.jsonl
 HFSA-main/pre_datasets/RRSIS-D_refseg/openclip_*/
-HFSA-main/scene_classification_reference/.git/
-HFSA-main/scene_classification_reference/checkpoints/
-HFSA-main/scene_classification_reference/data/
-HFSA-main/scene_classification_reference/runs/
-HFSA-main/scene_classification_reference/**/__pycache__/
+HFSA-main/HFSA-Object-Counting/
+HFSA-main/scene_classification_reference/
 *.pt
 *.pth
 *.onnx

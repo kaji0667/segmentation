@@ -15,6 +15,7 @@ from classification.data import SceneDataModule
 from classification.prepare import VRSBenchSceneDatasetBuilder
 from ultralytics.nn.modules import SceneClassifyHead
 from ultralytics.nn.tasks import ClassificationModel, guess_model_task
+from ultralytics.utils.loss import SceneClassificationLoss
 
 
 class SceneClassificationIntegrationTest(unittest.TestCase):
@@ -52,6 +53,15 @@ class SceneClassificationIntegrationTest(unittest.TestCase):
         self.assertEqual(report["top1_accuracy"], 0.75)
         self.assertEqual(report["top5_accuracy"], 1.0)
         self.assertEqual(report["confusion_matrix"], [[1, 1, 0], [0, 1, 0], [0, 0, 1]])
+
+    def test_scene_classification_loss_matches_cross_entropy(self):
+        logits = torch.tensor([[2.0, 0.5, -1.0], [0.1, 1.5, 0.2]], requires_grad=True)
+        labels = torch.tensor([0, 1])
+        actual = SceneClassificationLoss()(logits, labels)
+        expected = torch.nn.functional.cross_entropy(logits, labels)
+        torch.testing.assert_close(actual, expected)
+        actual.backward()
+        self.assertIsNotNone(logits.grad)
 
     def test_scene_classification_scripts_are_self_contained_and_project_relative(self):
         for filename in ("train_classification.sh", "test_classification.sh"):

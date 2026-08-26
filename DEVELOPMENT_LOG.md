@@ -985,3 +985,18 @@ Verification:
 - A real single-image CPU CLI run succeeded while `--data-dir` intentionally pointed to a missing directory and returned Top-3 predictions from the saved smoke checkpoint.
 - Fresh CPU smoke under `runs/smoke/classification_review_20260826`: 21 classes, batch 2, imgsz 64, 1 train/1 val batch; YOLOv12m pretrained loading matched 678 tensors and skipped 121, with 1,304,155 trainable Head parameters and 18,198,080 frozen parameters. The saved checkpoint was strictly reloaded for a 1-test-batch evaluation.
 - Active HFSA full CPU regression passed 46 tests; publication repository full CPU regression passed 46 tests. GPU smoke was not started because another GPU workload remained active.
+
+## 2026-08-26: Remove Teammate Source Snapshots and Integrate the Scene Loss
+
+Scope:
+- Added `SceneClassificationLoss(nn.Module)` to `HFSA-main/ultralytics/utils/loss.py`. It validates `[B, C]` logits and batch-aligned labels, then applies the same unsmoothed `nn.CrossEntropyLoss` used by the teammate implementation.
+- Updated both `SceneClassificationTrainer` and `SceneClassificationEvaluator` to use the explicit task Loss class; no optimizer, scheduler, Head, checkpoint, preprocessing, sampling, or metric formula changed.
+- Removed the complete active `HFSA-Object-Counting` and `scene_classification_reference` nested repositories after verifying that integrated counting/classification code had no runtime imports from them. The active directories were sent to the Windows Recycle Bin.
+- Removed all 11 tracked scene-classification upstream source files from the publication repository. ADR-0021/0022 retain algorithm decisions and the upstream classification commit for provenance.
+- Added the permanent delivery rule that teammate repositories are temporary audit inputs only and must not remain in the final activity tree or publication repository after integration.
+
+Verification:
+- Scene-classification directed tests increased to 8 and verified that `SceneClassificationLoss` is numerically identical to `torch.nn.functional.cross_entropy` and propagates gradients.
+- Active and publication repositories independently passed all 47 CPU tests after the upstream repositories were removed.
+- Fresh CPU smoke under `runs/smoke/classification_loss_review_20260826` completed 1 train and 1 validation batch through `SceneClassificationTrainer -> SceneClassificationLoss -> backward`, saved `best.pt`, strictly reloaded it, and completed a 1-test-batch evaluation.
+- The smoke retained 678/799 matched/skipped pretrained tensors and 1,304,155 trainable versus 18,198,080 frozen parameters. GPU smoke and complete scene training remain pending because another GPU workload was active.

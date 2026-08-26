@@ -15,7 +15,6 @@ This repository contains the HFSA task-specific referring-segmentation, object-c
 - `HFSA-main/scripts/test_refseg.sh`: evaluation-only entry for an existing referring-segmentation checkpoint.
 - `HFSA-main/counting/`, `train_counting.py`, and `test_counting.py`: text-guided detection-based object counting.
 - `HFSA-main/classification/`, `train_classification.py`, and `test_classification.py`: multi-scale single-label scene classification.
-- `HFSA-main/scene_classification_reference/`: selected auditable upstream source files; weights, nested Git metadata, data, runs, caches, and personal configuration are excluded.
 - Project notes: `CURRENT_STATE.md`, `ARCHITECTURE.md`, `DEVELOPMENT_LOG.md`, `THREAD_CHANGE_LOG.md`, `PROJECT_RULES.md`, `LITERATURE_READING_GUIDE.md`.
 
 ## Excluded
@@ -26,6 +25,7 @@ Large or machine-local artifacts are intentionally not tracked:
 - generated JSONL splits and OpenCLIP embedding caches, except `data.yaml`
 - training outputs under `HFSA-main/runs/`
 - pretrained/checkpoint weights such as `*.pt`
+- teammate/upstream repository snapshots and nested Git metadata; ADRs retain source repository and commit provenance
 - virtual environments, PDF notes, images, and temporary files
 
 ## Key Files For Future Head Changes
@@ -40,6 +40,7 @@ Large or machine-local artifacts are intentionally not tracked:
   - P2/P3/P4/P5 experimental wiring.
 - `HFSA-main/ultralytics/utils/loss.py`
   - `SemanticSegmentationLoss` contains BCE, Tversky/Dice-style loss, and optional false-positive penalties.
+  - `SceneClassificationLoss` preserves the teammate single-label cross-entropy objective behind an explicit HFSA task class.
 
 ## Typical Training
 

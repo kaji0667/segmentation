@@ -7,8 +7,8 @@ import time
 from pathlib import Path
 
 import torch
-import torch.nn as nn
 from PIL import Image
+from ultralytics.utils.loss import SceneClassificationLoss
 
 from .metrics import SceneClassificationMetrics
 
@@ -18,7 +18,7 @@ class SceneClassificationEvaluator:
         self.network = network
         self.device = torch.device(device)
         self.class_names = list(class_names)
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = SceneClassificationLoss()
 
     def evaluate(self, loader, max_batches=0):
         self.network.eval()
@@ -64,7 +64,7 @@ class SceneClassificationTrainer:
         self.config = config
         self.class_names = list(class_names)
         self.device = torch.device(config.device)
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = SceneClassificationLoss()
         self.optimizer = torch.optim.AdamW(
             self.network.head.parameters(), lr=config.lr, weight_decay=config.weight_decay
         )

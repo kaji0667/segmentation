@@ -8,16 +8,16 @@
 - 旧 epoch-44 checkpoint 在相同 3,480 条 cleaned test 的公平复评为 `oIoU=0.702938`、`mIoU=0.552721`，且五档 Pr、Precision、Recall、F1 全部高于新训练。因此保留空 mask 清洗规则，但不替换当前发布 checkpoint。
 - checkpoint 文件锁恢复能力已同步回活动副本 canonical `train_semseg.py`；活动副本与发布副本的分割恢复逻辑一致。
 - 目标计数的 `CountingDetect`、任务包、训练/测试入口和脚本已确认存在于活动副本，不再只存在于发布副本。
-- 已从 `zhuoletian-collab/changjingfenlei@688c2a9` 导入场景分类参考源码并接入 `SceneClassifyHead`、m-scale YAML、类化数据/配置/训练/推理/评测和独立脚本。
+- 已基于 `zhuoletian-collab/changjingfenlei@688c2a9` 完成 `SceneClassifyHead`、`SceneClassificationLoss`、m-scale YAML、类化数据/配置/训练/推理/评测和独立脚本接入；上游源码快照已从活动目录和发布仓库移除，仅由 ADR 保留 commit 溯源。
 - 场景分类已完成独立复核：单图推理不再依赖数据集目录，`--split all` 可正确合并显式 train/val/test，训练 DataLoader 不会向含 `BatchNorm1d` 的 Head 送入末尾单样本 batch。
-- 场景分类 7 项专项测试、源 checkpoint strict 兼容检查、单图 Top-K CLI、1-train/1-val/1-test CPU smoke 均通过；活动副本与发布仓库完整 CPU 回归均为 46 项通过。真实完整场景分类训练尚未执行，GPU smoke 因 GPU 仍有其他负载未启动。
+- 场景分类 8 项专项测试、源 checkpoint strict 兼容检查、单图 Top-K CLI、`SceneClassificationLoss` 的 1-train/1-val/1-test CPU smoke 均通过；活动副本与发布仓库完整 CPU 回归均为 47 项通过。真实完整场景分类训练尚未执行，GPU smoke 因 GPU 仍有其他负载未启动。
 
 ## 当前主线
 
 - 当前个人负责的任务是 RRSIS-D 文本引导单目标二值分割：输入遥感图像与自由文本描述，输出对应目标的 `[B,1,H,W]` mask。
 - 团队已确认多任务共用 YOLOv12m Backbone 和 Neck；当前分割分支使用匹配的 `yolov12m-semseg.yaml`、`yolov12m.pt`、P3/P4/P5 和 ADR-0015 `TextPromptSegment` 语义角色 token pooling Head。
 - 未经用户确认，不修改 Backbone、Neck、OpenCLIP 或其他成员任务实现。
-- 当前发布代码已包含空 mask 清洗与 checkpoint 恢复、目标计数和场景分类接入；活动副本的 canonical `train_semseg.py`、计数/分类实现和完整测试集合均已与发布副本同步。
+- 当前发布代码已包含空 mask 清洗与 checkpoint 恢复、目标计数和场景分类接入；活动副本的 canonical `train_semseg.py`、计数/分类实现和完整测试集合均已与发布副本同步。活动目录和发布仓库均不再携带队友完整源码仓库。
 
 ## 已完成的分割任务封装
 
@@ -54,7 +54,7 @@
 - 计数仍采用原有“文本引导类无关检测 -> NMS -> 检测框数”逻辑，不引入密度图、计数回归 Head 或新 Loss；共享 YOLOv12m Backbone/Neck、OpenCLIP 和文本引导检测 Trainer。
 - 计数评测当前明确保持队友的 positive-query VOC 协议，只查询 XML 中实际存在的类别，报告 EM、MAE、RMSE 与逐类别统计；不得把它表述为包含零计数问答的完整协议。
 - 队友仓库未提供训练 checkpoint，本地也未完成 VRSBench 真实数据 smoke；当前验证范围为语法、参数展开、Head 等价性、模型构建和预训练权重静态加载。
-- 队友场景分类已接入 `SceneClassifyHead`、m-scale YAML、类化配置/数据/训练/推理/评测、数据准备工具及独立 Python/Shell 入口；算法继续使用 P3/P4/P5 空间注意力 + GeM 和冻结 Backbone/Neck。
+- 队友场景分类已接入 `SceneClassifyHead`、`SceneClassificationLoss`、m-scale YAML、类化配置/数据/训练/推理/评测、数据准备工具及独立 Python/Shell 入口；算法继续使用 P3/P4/P5 空间注意力 + GeM、单标签 CrossEntropy 和冻结 Backbone/Neck。
 - 场景分类已完成 CPU 链路 smoke 与 checkpoint 严格重载，但尚未完成真实完整数据训练和空闲 GPU smoke；smoke 指标仅用于验证链路。
 
 ## 下一步

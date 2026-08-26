@@ -238,3 +238,11 @@
 - 活动副本补齐发布仓库已有的 legacy cosine scheduler 恢复测试；`train_semseg.py`、计数、分类核心实现和测试集合均已同步。
 - 分类 7 项定向测试、缺失数据目录条件下的单图 Top-K、全新 1-train/1-val/1-test CPU smoke 均通过；活动与发布副本完整 CPU 回归均为 46 项通过。
 - GPU 仍有其他负载，本轮未启动 CUDA smoke 或完整场景分类训练；真实训练仍是后续事项。
+
+### 33. 队友源码快照移除与分类 Loss 正式接入
+
+- 新增统一 `SceneClassificationLoss`，位于 `ultralytics/utils/loss.py`；分类 Trainer/Evaluator 不再直接实例化裸 `nn.CrossEntropyLoss`，但数学公式保持不变。
+- 活动副本中的 `HFSA-Object-Counting` 和 `scene_classification_reference` 完整嵌套仓库已移入回收站；发布仓库中的 11 个分类参考源码文件已删除。
+- 融合后的 `CountingDetect`、`counting/`、`SceneClassifyHead`、`classification/`、模型 YAML、Loss、训练/测试脚本和测试均保留，且无队友目录运行时依赖。
+- `PROJECT_RULES.md` 新增长期交付边界：队友仓库只能作为临时审计输入，融合后不得保留完整源码快照或嵌套 Git；来源由 ADR 的仓库地址和 commit 追溯。
+- 分类专项测试 `8/8`、活动与发布完整 CPU 回归 `47/47`、新 Loss 的 1-train/1-val/1-test CPU smoke 均通过；GPU smoke 和完整场景分类训练仍待 GPU 空闲后执行。

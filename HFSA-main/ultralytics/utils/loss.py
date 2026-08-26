@@ -609,6 +609,23 @@ class v8ClassificationLoss:
         return loss, loss_items
 
 
+class SceneClassificationLoss(nn.Module):
+    """Cross-entropy criterion for the integrated single-label scene task."""
+
+    def __init__(self):
+        super().__init__()
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, logits, labels):
+        """Compute the teammate-compatible single-label classification loss."""
+        if not isinstance(logits, torch.Tensor) or logits.ndim != 2:
+            raise TypeError("Scene classification logits must be a [B, C] tensor.")
+        labels = labels.long().view(-1)
+        if logits.shape[0] != labels.shape[0]:
+            raise ValueError("Scene classification logits and labels must have the same batch size.")
+        return self.criterion(logits, labels)
+
+
 class SemanticSegmentationLoss:
     """Criterion class for dense semantic segmentation masks."""
 
