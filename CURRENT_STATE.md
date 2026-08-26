@@ -10,6 +10,7 @@
 - 分割 checkpoint 保存、raw-best 选择、resume 协议、RNG 和 CSV 恢复包装为 `tasks/refseg/checkpoint.py::RefSegCheckpointManager`。分类仍由自身 Trainer 保存 Head checkpoint；计数仍复用 Ultralytics 检测 checkpoint。
 - 目标检测 `train.py`、`val.py` 和 `text_encoder/` 本次没有修改，也没有建立 `tasks/detection/`。
 - 发布副本与活动副本变更文件哈希一致；两边最终全量 CPU 回归均为 `51/51`。新入口真实 CPU smoke 已完成：分割 1 个 test batch、分类 1 个 test batch；计数因缺少真实数据和训练 checkpoint 仍以静态构建与专项回归为验证边界。
+- `scripts/train_classification.sh` 现在是可直接启动的自包含正式训练脚本：默认 `data/VRSBench_scene` 不存在时，会先从 `data/VRSBench` 自动生成完整 ImageFolder 场景数据，随后以 YOLOv12m、batch 32、imgsz 640、20 epochs 开始训练；后续运行检测到数据已存在便跳过整理。
 
 ## 2026-08-26 最新状态：场景分类接入复核完成
 
@@ -77,5 +78,5 @@
 - 分割训练包不需要携带 `run_semseg_preset.sh`；`scripts/train_refseg.sh` 已包含所需正式参数。
 - 运行前仍需提供项目源码、RRSIS-D 数据与缓存、`pretrain_model/yolov12m.pt`，并激活具备 PyTorch、OpenCLIP、OpenCV 等依赖的环境。
 - 计数训练还需提供 VOC 风格 VRSBench 数据；独立测试需提供计数 `best.pt`，默认路径均可通过脚本环境变量覆盖。
-- 场景分类训练需要 ImageFolder 或通过 `prepare_classification_data.py` 从 VOC VRSBench 生成的数据、`pretrain_model/yolov12m.pt`；独立测试需要分类 Head checkpoint。单图 `--image` 推理不要求数据集目录存在。
+- 场景分类正常训练只需在已激活项目环境后执行 `bash scripts/train_classification.sh`；首次运行会自动从 VOC VRSBench 生成 ImageFolder 数据，在 `/mnt` 盘扫描 XML 可能耗时数分钟。独立测试需要分类 Head checkpoint；单图 `--image` 推理不要求数据集目录存在。
 - 默认训练输出目录已有历史结果时，应通过 `SAVE_DIR` 指定新目录，避免覆盖旧实验。

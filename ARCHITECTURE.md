@@ -232,3 +232,4 @@ scripts/train_<task>.sh or scripts/test_<task>.sh
 - `SceneClassificationLoss` 位于统一 `ultralytics/utils/loss.py`，封装原单标签 CrossEntropy；Trainer 和 Evaluator 均调用该任务 Loss 类，不依赖上游训练脚本。
 - 推理预处理可通过 `SceneDataModule.build_transform()` 独立构建，因此单图 Top-K 不依赖数据集目录；`split=all` 在显式 train/val/test 布局下合并各 split 并校验类别顺序。训练保持原 Head 的 BatchNorm 结构，并避免产生末尾单样本 batch。
 - 分类、计数和指代分割保持独立 Trainer、Loss、数据与评测协议；本次未修改 OpenCLIP、`TextPromptSegment` 或现有分割/计数训练链路。
+- `scripts/train_classification.sh` 固化正式训练默认值，并在默认 `data/VRSBench_scene` 尚未生成时调用 `prepare_classification_data.py`，从 VOC 风格 `data/VRSBench` 一次性构建 ImageFolder 数据；正常训练入口不要求用户手工输入数据、模型、权重或训练超参数。

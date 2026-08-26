@@ -1027,3 +1027,18 @@ Verification:
 - Active and publication repositories independently passed all 47 CPU tests after the upstream repositories were removed.
 - Fresh CPU smoke under `runs/smoke/classification_loss_review_20260826` completed 1 train and 1 validation batch through `SceneClassificationTrainer -> SceneClassificationLoss -> backward`, saved `best.pt`, strictly reloaded it, and completed a 1-test-batch evaluation.
 - The smoke retained 678/799 matched/skipped pretrained tensors and 1,304,155 trainable versus 18,198,080 frozen parameters. GPU smoke and complete scene training remain pending because another GPU workload was active.
+
+## 2026-08-26: Make Scene-Classification Training Script Directly Runnable
+
+Scope:
+- Updated `scripts/train_classification.sh` so normal training requires only `bash scripts/train_classification.sh` after environment activation.
+- The script uses the fixed formal defaults (`data/VRSBench_scene`, YOLOv12m, `yolov12m.pt`, batch 32, 640 pixels, 20 epochs).
+- If the default ImageFolder dataset is absent, the script automatically invokes `prepare_classification_data.py` once against `data/VRSBench`; existing prepared data skips this step.
+- An incomplete non-empty output directory fails explicitly instead of being silently overwritten.
+- Classification Head, Loss, Trainer, checkpoint format, Backbone, Neck and OpenCLIP were not changed.
+
+Verification:
+- Shell syntax check passed under WSL Bash.
+- Static integration coverage asserts the default data source and automatic preparation call.
+- Existing 21-class, 42-image `data/VRSBench_scene_smoke` was recognized as ready by the direct script path; command expansion used the expected thin Python training entry.
+- Scene-classification directed tests passed `8/8`, task-layout tests passed `3/3`, and the publication repository complete CPU regression passed `51/51`.

@@ -256,3 +256,10 @@
 - 融合后的 `CountingDetect`、`counting/`、`SceneClassifyHead`、`classification/`、模型 YAML、Loss、训练/测试脚本和测试均保留，且无队友目录运行时依赖。
 - `PROJECT_RULES.md` 新增长期交付边界：队友仓库只能作为临时审计输入，融合后不得保留完整源码快照或嵌套 Git；来源由 ADR 的仓库地址和 commit 追溯。
 - 分类专项测试 `8/8`、活动与发布完整 CPU 回归 `47/47`、新 Loss 的 1-train/1-val/1-test CPU smoke 均通过；GPU smoke 和完整场景分类训练仍待 GPU 空闲后执行。
+
+### 34. 场景分类正式训练脚本改为直接启动
+
+- `scripts/train_classification.sh` 已内置正式训练数据、模型、预训练权重、输出目录和超参数默认值，正常使用不再要求手工输入一串环境变量。
+- 首次执行若缺少 `data/VRSBench_scene`，脚本会自动从 `data/VRSBench` 整理完整 21 类 ImageFolder 数据；后续执行直接复用。
+- 数据整理保持原“恰好一个场景类别”筛选规则和硬链接默认方式，不修改分类算法、Head、Loss 或 Trainer。
+- 检测到非空但无类别图片的残缺输出目录时显式停止，避免覆盖用户数据。

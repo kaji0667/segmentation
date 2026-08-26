@@ -72,6 +72,12 @@ class SceneClassificationIntegrationTest(unittest.TestCase):
             self.assertNotIn("D:\\", text)
             self.assertNotIn("/mnt/", text)
 
+        train_text = (ROOT / "scripts" / "train_classification.sh").read_text(encoding="utf-8")
+        self.assertIn('DATA_DIR="${DATA_DIR:-data/VRSBench_scene}"', train_text)
+        self.assertIn('VOC_ROOT="${VOC_ROOT:-data/VRSBench}"', train_text)
+        self.assertIn('prepare_classification_data.py', train_text)
+        self.assertIn('--output-dir "$DATA_DIR"', train_text)
+
     def test_vrsbench_scene_selection_keeps_exactly_one_scene_class(self):
         select = VRSBenchSceneDatasetBuilder.select_scene_label
         self.assertEqual(select(["ship", "harbor", "harbor"]), "harbor")

@@ -13,7 +13,7 @@ Accepted；代码与最小 smoke 已验证，真实完整训练尚未执行。
 1. 保留原 `ClassifyHeadV2` 参数命名和计算流程，包装为 `SceneClassifyHead`，通过 `parse_model()` 接收 P3/P4/P5 通道并加入任务识别。
 2. 新增 `yolov12-classification.yaml`；通过 `yolov12m-classification.yaml` alias 解析 m scale，Backbone/Neck 与现有 YOLOv12 完全一致，仅替换最终任务 Head。
 3. 保留冻结特征提取器、ImageNet normalization、水平/垂直翻转、ColorJitter、类别平衡采样、CrossEntropy、AdamW、warmup+cosine、梯度裁剪和按 top-1 accuracy 选模的原训练流程；CrossEntropy 以 `SceneClassificationLoss` 明确包装在统一 `ultralytics/utils/loss.py` 中。
-4. 将配置、ImageFolder 数据、VRSBench 场景数据准备、模型、训练、推理、评测与指标包装为独立类；新增 `train_classification.py`、`test_classification.py`、`prepare_classification_data.py` 和自包含 Shell 脚本。
+4. 将配置、ImageFolder 数据、VRSBench 场景数据准备、模型、训练、推理、评测与指标包装为独立类；新增 `train_classification.py`、`test_classification.py`、`prepare_classification_data.py` 和自包含 Shell 脚本。训练脚本在默认 ImageFolder 数据缺失时自动执行一次数据准备，使正式训练可直接通过脚本启动。
 5. checkpoint 继续保存独立 Head 状态和类别顺序，同时记录模型 YAML、预训练权重匹配数和完整配置；旧 `scene_vrsbench_best.pth` 的 `classify_head` 可 strict load 到新 Head。
 6. 外部源码只作为临时审计输入。完成等价性检查和 HFSA 类化接入后，删除活动目录与发布仓库中的上游源码快照；仅在本 ADR 保留仓库地址和 commit 作为溯源，不形成运行时或交付依赖。
 
