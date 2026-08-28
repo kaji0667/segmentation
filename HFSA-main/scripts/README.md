@@ -6,11 +6,15 @@
 
 训练脚本已经内置当前正式 baseline 的全部参数，直接调用 `train_refseg.py`，不依赖 `run_semseg_preset.sh`。独立评测调用 `test_refseg.py`；旧 `train_semseg.py` 仅保留为兼容入口。
 
-训练并在训练完成后测试：
+训练（每轮执行 validation，训练结束后保留最佳 checkpoint；不会自动执行 test）：
 
 ```bash
 bash scripts/train_refseg.sh
 ```
+
+独立测试默认保存前 5 个测试 batch 的预览图：
+`test_batch0_pred.jpg`、`test_batch1_pred.jpg`，依次到 `test_batch4_pred.jpg`。
+通过 `TEST_PREVIEW_BATCHES` 调整数量，设为 `0` 可只保留指标报告而不生成测试预览。
 
 只测试已有 checkpoint，不会重新训练，也不会覆盖原训练目录：
 
@@ -22,8 +26,14 @@ bash scripts/test_refseg.sh
 
 ```bash
 DEVICE=cuda:0 BATCH=8 EPOCHS=80 bash scripts/train_refseg.sh
-CHECKPOINT=runs/semseg/other/weights/best_raw.pt SAVE_DIR=runs/semseg/other_eval bash scripts/test_refseg.sh
+TEST_PREVIEW_BATCHES=5 CHECKPOINT=runs/semseg/other/weights/best_raw.pt SAVE_DIR=runs/semseg/other_eval bash scripts/test_refseg.sh
 ```
+
+训练输出位于 `SAVE_DIR`：每轮 validation 生成
+`val_batch0_pred_epoch<N>.jpg`，权重位于 `weights/last.pt`、`weights/best.pt` 和
+`weights/best_raw.pt`。训练完成后请单独执行 `scripts/test_refseg.sh`；test 严格加载
+指定 checkpoint，并复用 checkpoint 保存的 validation 阈值。测试指标写入
+`test_results.json`，预览图也直接写入同一 `SAVE_DIR`。
 
 还可在命令末尾追加 `train_refseg.py` 参数；末尾参数优先级最高。
 

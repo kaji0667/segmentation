@@ -19,6 +19,7 @@ exec "$PYTHON_BIN" test_refseg.py \
   --batch "${BATCH:-4}" \
   --workers "${WORKERS:-2}" \
   --max-test-batches "${MAX_TEST_BATCHES:-0}" \
+  --test-preview-batches "${TEST_PREVIEW_BATCHES:-5}" \
   --save-dir "$SAVE_DIR" \
   --text-queries \
   --text-encoder openclip \

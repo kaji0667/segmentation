@@ -90,7 +90,7 @@ The current no-attention candidate has one output path: learnable token pooling,
 
 ## Checkpoint Selection and Retention
 
-The standard semantic-segmentation baseline selects both the validation threshold and checkpoint score by official sample mIoU. `best.pt` retains the historical `min_delta` rule used by early stopping, while `best_raw.pt` records every strict raw maximum without applying `min_delta`. Test-after-train prefers `best_raw.pt`, falls back to legacy `best.pt`, and always reuses the checkpoint's validation-selected threshold. See ADR-0007.
+The standard semantic-segmentation baseline selects both the validation threshold and checkpoint score by official sample mIoU. `best.pt` retains the historical `min_delta` rule used by early stopping, while `best_raw.pt` records every strict raw maximum without applying `min_delta`. Test evaluation reuses the selected checkpoint's validation threshold; the independent test script defaults to `best_raw.pt`, while legacy runs may explicitly use `best.pt`. See ADR-0007.
 
 ## Learnable Text Token Pooling Candidate
 
@@ -164,7 +164,7 @@ The residual last-layer weight norm was `1.011367`, and the complete test mask c
 
 ## Referring-Segmentation Task Execution
 
-`HFSA-main/scripts/train_refseg.sh` is the self-contained task-level training wrapper. It locates `HFSA-main`, changes to that directory, and invokes the thin `train_refseg.py` entry with the accepted baseline parameters: YOLOv12m, RRSIS-D, batch 4, 60 epochs, patience 8, and test-after-train by default. It embeds the required arguments and has no runtime dependency on `run_semseg_preset.sh`; environment variables and trailing CLI arguments may override the defaults.
+`HFSA-main/scripts/train_refseg.sh` is the self-contained task-level training wrapper. It locates `HFSA-main`, changes to that directory, and invokes the thin `train_refseg.py` entry with the accepted baseline parameters: YOLOv12m, RRSIS-D, batch 4, 60 epochs, and patience 8. It performs training plus per-epoch validation only; test evaluation is a separate `scripts/test_refseg.sh` step. The training wrapper has no runtime dependency on `run_semseg_preset.sh`; environment variables and trailing CLI arguments may override the defaults.
 
 `HFSA-main/scripts/test_refseg.sh` is the independent evaluation wrapper. It invokes `test_refseg.py --checkpoint ...`; `RefSegEvaluationApplication` supplies evaluation-only mode, builds only the official test dataset/cache/loader, strictly loads the full checkpoint, reuses the checkpoint's stored validation threshold, and writes to a separate evaluation directory. It does not build the train or validation datasets and does not load YOLO pretraining weights. All wrapper paths are repository-relative; no machine-specific drive or `/mnt` path is embedded.
 
@@ -233,3 +233,9 @@ scripts/train_<task>.sh or scripts/test_<task>.sh
 - 推理预处理可通过 `SceneDataModule.build_transform()` 独立构建，因此单图 Top-K 不依赖数据集目录；`split=all` 在显式 train/val/test 布局下合并各 split 并校验类别顺序。训练保持原 Head 的 BatchNorm 结构，并避免产生末尾单样本 batch。
 - 分类、计数和指代分割保持独立 Trainer、Loss、数据与评测协议；本次未修改 OpenCLIP、`TextPromptSegment` 或现有分割/计数训练链路。
 - `scripts/train_classification.sh` 固化正式训练默认值，并在默认 `data/VRSBench_scene` 尚未生成时调用 `prepare_classification_data.py`，从 VOC 风格 `data/VRSBench` 一次性构建 ImageFolder 数据；正常训练入口不要求用户手工输入数据、模型、权重或训练超参数。
+
+## 2026-08-28 RefSeg Test Preview Batches
+
+The referring-segmentation evaluator keeps one metric pass and the frozen validation threshold, but may now retain CPU copies of the first configured test batches for qualitative output. `--test-preview-batches` defaults to `5`; the task scripts expose the same setting as `TEST_PREVIEW_BATCHES`. Files are named `test_batch0_pred.jpg`, `test_batch1_pred.jpg`, and so on in the evaluation `SAVE_DIR`.
+
+This is a bounded visualization/reporting path. It does not alter dataloader order, logits, threshold selection, confusion matrices, oIoU/mIoU/Pr metrics, checkpoint selection, or model state. Validation previews remain one `val_batch0_pred_epoch<N>.jpg` per epoch.

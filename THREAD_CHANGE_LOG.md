@@ -263,3 +263,10 @@
 - 首次执行若缺少 `data/VRSBench_scene`，脚本会自动从 `data/VRSBench` 整理完整 21 类 ImageFolder 数据；后续执行直接复用。
 - 数据整理保持原“恰好一个场景类别”筛选规则和硬链接默认方式，不修改分类算法、Head、Loss 或 Trainer。
 - 检测到非空但无类别图片的残缺输出目录时显式停止，避免覆盖用户数据。
+
+### 35. 指代分割训练/测试拆分与前 N 个测试 batch 预览
+
+- `scripts/train_refseg.sh` 删除自动 test 部分，只执行训练与每轮 validation；测试改为训练完成后单独运行 `scripts/test_refseg.sh`。
+- 独立测试新增 `TEST_PREVIEW_BATCHES`，默认 `5`，输出 `test_batch0_pred.jpg`、`test_batch1_pred.jpg` 等；实际测试 batch 少于请求数时只生成存在的部分。
+- `test_results.json` 记录请求数量与实际预览文件列表；指标、验证阈值、最佳 checkpoint 选择和模型计算均未变化。
+- 定向测试 `7/7`、Shell 语法/展开检查和全库 CPU 回归 `53/53` 通过；服务器真实 GPU smoke 与正式运行由用户上传增量包后执行。

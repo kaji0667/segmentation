@@ -94,12 +94,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--checkpoint", type=str, default="", help="Full semantic-segmentation checkpoint used by --eval-only.")
     parser.add_argument("--resume", type=str, default="", help="Resume training from a full last.pt checkpoint, including optimizer state.")
     parser.add_argument("--max-test-batches", type=int, default=0, help="Stop test evaluation after this many batches; 0 means full test split.")
+    parser.add_argument("--test-preview-batches", type=int, default=5, help="Save previews for the first N test batches; 0 disables test previews.")
     parser.add_argument("--print-interval", type=int, default=10, help="Print train progress every N batches.")
     parser.add_argument("--save-dir", type=str, default="runs/semseg/train", help="Directory for run artifacts.")
     parser.add_argument("--nosave", action="store_true", help="Disable checkpoint and artifact saving.")
     parser.add_argument("--no-val", action="store_true", help="Disable validation.")
     parser.add_argument("--no-plots", action="store_true", help="Disable results and confusion-matrix plots.")
-    parser.add_argument("--no-preview", action="store_true", help="Disable train/val image preview saving.")
+    parser.add_argument("--no-preview", action="store_true", help="Disable train/val/test image preview saving.")
     parser.add_argument("--no-tensorboard", action="store_true", help="Disable TensorBoard event logging.")
     parser.add_argument("--text-queries", action="store_true", help="Use image + text prompt -> binary mask samples.")
     parser.add_argument("--text-encoder", type=str, default="openclip", choices=("learned", "openclip"), help="Prompt embedding source for text-query training.")
@@ -867,6 +868,7 @@ def validate(
     val_thresholds: Optional[List[float]] = None,
     val_select_metric: str = "iou",
     val_fbeta: float = 0.7,
+    preview_paths: Optional[List[Path]] = None,
 ) -> Dict[str, Any]:
     model.eval()
     thresholds = val_thresholds or [0.5]
@@ -894,8 +896,8 @@ def validate(
     )
     running = 0.0
     seen = 0
-    preview_batch = None
-    preview_logits = None
+    requested_preview_paths = list(preview_paths) if preview_paths is not None else ([preview_path] if preview_path else [])
+    preview_items: List[Tuple[Dict[str, Any], torch.Tensor]] = []
 
     for batch_i, batch in enumerate(loader, start=1):
         batch = move_batch_to_device(batch, device)
@@ -936,9 +938,16 @@ def validate(
         running += float(loss.detach())
         seen = batch_i
 
-        if preview_path is not None and batch_i == 1:
-            preview_batch = batch
-            preview_logits = logits
+        if len(preview_items) < len(requested_preview_paths):
+            preview_items.append(
+                (
+                    {
+                        "img": batch["img"].detach().cpu(),
+                        "mask": batch["mask"].detach().cpu(),
+                    },
+                    logits.detach().cpu(),
+                )
+            )
         if max_batches and batch_i >= max_batches:
             break
 
@@ -964,8 +973,10 @@ def validate(
     )
     best_threshold = float(best_metrics["threshold"])
     best_confusion = confusions[best_threshold]
-    if preview_path is not None and preview_batch is not None and preview_logits is not None:
-        save_preview(preview_path, preview_batch, preview_logits, palette, threshold=best_threshold)
+    saved_preview_paths: List[str] = []
+    for target_path, (preview_batch, preview_logits) in zip(requested_preview_paths, preview_items):
+        save_preview(target_path, preview_batch, preview_logits, palette, threshold=best_threshold)
+        saved_preview_paths.append(str(target_path))
     text_class_iou = (
         text_class_target_ious(class_confusions[best_threshold], class_names_for_text or [])
         if class_confusions is not None
@@ -1007,6 +1018,7 @@ def validate(
         "threshold_metrics": threshold_metrics,
         "confusion": best_confusion,
         "evaluated_samples": int(sample_iou_counts[best_threshold]),
+        "preview_files": saved_preview_paths,
     }
 
 
@@ -1024,6 +1036,8 @@ def build_summary_writer(save_dir: Path, disabled: bool):
 
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
+    if int(args.test_preview_batches) < 0:
+        raise ValueError("--test-preview-batches must be >= 0")
     if args.eval_only and args.resume:
         raise ValueError("--eval-only and --resume are mutually exclusive.")
     if args.eval_only:
@@ -1524,6 +1538,11 @@ def main(argv: Optional[List[str]] = None) -> None:
             torch.cuda.reset_peak_memory_stats(device)
             torch.cuda.synchronize(device)
         test_start = time.perf_counter()
+        test_preview_paths = (
+            []
+            if args.no_preview
+            else [save_dir / f"test_batch{batch_index}_pred.jpg" for batch_index in range(args.test_preview_batches)]
+        )
         test_metrics = validate(
             model,
             test_loader,
@@ -1531,7 +1550,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             metric_nc,
             ignore_index,
             args.max_test_batches,
-            None if args.no_preview else save_dir / "test_batch0_pred.jpg",
+            None,
             palette,
             args.text_queries,
             prompt_embeddings,
@@ -1539,6 +1558,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             [test_threshold],
             "oiou",
             args.val_fbeta,
+            preview_paths=test_preview_paths,
         )
         if device.type == "cuda":
             torch.cuda.synchronize(device)
@@ -1590,6 +1610,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             "text_encoder": args.text_encoder,
             "text_model_name": args.text_model_name,
             "text_pretrained": args.text_pretrained,
+            "test_preview_batches_requested": int(args.test_preview_batches),
+            "test_preview_files": test_metrics["preview_files"],
         }
         with (save_dir / "test_results.json").open("w", encoding="utf-8") as f:
             json.dump(test_report, f, ensure_ascii=False, indent=2, sort_keys=True)

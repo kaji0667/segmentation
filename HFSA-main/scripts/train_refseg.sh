@@ -12,14 +12,6 @@ if [[ -n "${GPU:-}" ]]; then
   export CUDA_VISIBLE_DEVICES="$GPU"
 fi
 
-test_args=()
-if [[ "${TEST_AFTER_TRAIN:-1}" == "1" ]]; then
-  test_args+=(
-    --test-after-train
-    --max-test-batches "${MAX_TEST_BATCHES:-0}"
-  )
-fi
-
 exec "$PYTHON_BIN" train_refseg.py \
   --data "${DATA:-pre_datasets/RRSIS-D_refseg/data.yaml}" \
   --model "${MODEL:-ultralytics/cfg/models/v12/yolov12m-semseg.yaml}" \
@@ -57,5 +49,4 @@ exec "$PYTHON_BIN" train_refseg.py \
   --val-thresholds 0.6,0.7,0.8,0.85,0.9,0.95 \
   --val-select-metric miou \
   --save-dir "${SAVE_DIR:-runs/semseg/srp_yolov12m_axis}" \
-  "${test_args[@]}" \
   "$@"

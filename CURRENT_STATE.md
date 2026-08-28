@@ -1,6 +1,15 @@
 # CURRENT_STATE.md
 
-最后更新：2026-08-26
+最后更新：2026-08-28
+
+## 2026-08-28 最新状态：测试预览扩展为前 N 个 batch
+
+- 指代分割训练、每轮 validation、raw-best checkpoint 选择和训练后 test 协议保持不变。
+- 新增 `--test-preview-batches`，Python 默认值与两份 RefSeg Shell 脚本的 `TEST_PREVIEW_BATCHES` 默认值均为 `5`。
+- 独立测试会输出 `test_batch0_pred.jpg` 至实际可用的前 N 个 batch；`0` 或 `--no-preview` 禁用测试预览。
+- `scripts/train_refseg.sh` 已移除自动 test，只执行 train 与每轮 validation；训练完成后通过 `scripts/test_refseg.sh` 单独加载最佳 checkpoint 测试。
+- `test_results.json` 新增请求数量和实际生成文件列表，不参与指标、阈值或 checkpoint 选择。
+- 本次没有修改 Backbone、Neck、OpenCLIP、`TextPromptSegment`、Loss、指标、数据划分或 checkpoint tensor 格式。
 
 ## 2026-08-26 最新状态：三个非检测任务统一进入 `tasks/`
 

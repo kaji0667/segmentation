@@ -1042,3 +1042,18 @@ Verification:
 - Static integration coverage asserts the default data source and automatic preparation call.
 - Existing 21-class, 42-image `data/VRSBench_scene_smoke` was recognized as ready by the direct script path; command expansion used the expected thin Python training entry.
 - Scene-classification directed tests passed `8/8`, task-layout tests passed `3/3`, and the publication repository complete CPU regression passed `51/51`.
+
+## 2026-08-28: Separate RefSeg Training and Test, Add Configurable Test Previews
+
+Scope:
+- Removed automatic test argument assembly from `scripts/train_refseg.sh`; the script now performs training and per-epoch validation only.
+- Kept independent evaluation in `scripts/test_refseg.sh`, adding `TEST_PREVIEW_BATCHES` with default `5` and CLI `--test-preview-batches`.
+- Extended the existing evaluation pass to cache only the requested leading batches on CPU, then save `test_batch0_pred.jpg`, `test_batch1_pred.jpg`, and so on with the frozen checkpoint validation threshold.
+- Added requested/generated preview fields to `test_results.json`. Backbone, Neck, OpenCLIP, `TextPromptSegment`, Loss, metrics, split, dataloader order, threshold policy, and checkpoint selection were unchanged.
+
+Verification:
+- Python compilation passed for the RefSeg engine, entries, and directed test.
+- RefSeg directed tests passed `7/7` in the WSL `hfsa_env`.
+- Both Shell scripts passed `bash -n`; dry-run expansion confirmed the training command has no test arguments and the independent test command receives the requested preview count.
+- Publication repository full CPU regression passed `53/53`.
+- No server GPU/data evaluation was run locally; the user will upload the incremental code package and run smoke/formal commands in `~/hfsa-transfer/HFSA-main`, conda environment `hfsa`.
