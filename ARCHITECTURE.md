@@ -8,7 +8,7 @@ HFSA targets multimodal remote-sensing interpretation. The current personal bran
 
 - Input: one remote-sensing image and one free-text referring expression.
 - Output: one binary mask for the referred target.
-- Main entries: `HFSA-main/train_refseg.py` and `HFSA-main/test_refseg.py`; `train_semseg.py` is a compatibility wrapper.
+- Main entries: `HFSA-main/train_refseg.py` and `HFSA-main/test_refseg.py`; the obsolete `train_semseg.py` compatibility wrapper has been removed.
 - Dataset adapter: `HFSA-main/dataset/rrsisd_refseg_dataset.py`.
 - Main model config: the shared `HFSA-main/ultralytics/cfg/models/v12/yolov12-semseg.yaml`, invoked through the standard `yolov12m-semseg.yaml` scale alias.
 
@@ -20,6 +20,7 @@ The project baseline and core YOLO/OpenCLIP code were mostly completed by the se
 - Text embedding layer: uses cached OpenCLIP text vectors, currently expected to match `text_dim=768`.
 - Model layer: uses YOLOv12 backbone/neck with a text-guided segmentation head through `TextPromptSegment`.
 - Task layer: `tasks/refseg/engine.py` builds datasets, samplers, model, loss, metrics, plots, and run artifacts; `tasks/refseg/checkpoint.py` owns restartable checkpoint policy.
+- Single-image inference layer: `tasks/refseg/inference.py` strictly loads a full RefSeg checkpoint, encodes the supplied expression into OpenCLIP token features, restores the predicted probability/mask to the original image size, and emits mask/probability/overlay artifacts.
 - Experiment artifacts: `HFSA-main/runs/` stores training results and should not be treated as source code.
 
 ## Dependency Direction
@@ -181,6 +182,8 @@ The resize path remains bilinear for images and nearest-neighbor for masks: the 
 ADR-0020 and ADR-0023 fix the integration boundary at a shared YOLOv12m Backbone/Neck plus task-specific Heads, Trainers, datasets, losses, checkpoints, and evaluators. Referring segmentation, counting, and classification now live under `HFSA-main/tasks/` with thin root entries. Detection intentionally continues to use its existing `train.py`, `val.py`, and `text_encoder/` pipeline and was not reorganized in this change.
 
 Each task owns self-contained `scripts/train_<task>.sh` and `scripts/test_<task>.sh` wrappers. A future common `train.py` may parse a task name or number and dispatch to the corresponding Trainer, but it must not become a combined task implementation. The final interactive task switch is a separate inference router that selects the task configuration, Head, checkpoint, preprocessing, and postprocessing. This decision does not authorize joint multi-dataset or simultaneous multi-Head training.
+
+The inference router uses explicit manual task selection. After selection, each task requests only its own inputs and retains its own output type: RefSeg uses image plus text and returns a mask; counting uses image plus target text and returns count/boxes; classification uses only an image and returns class probabilities. The router must not impose a universal image-text or mask response contract.
 
 ## Text-Guided Object Counting Task
 

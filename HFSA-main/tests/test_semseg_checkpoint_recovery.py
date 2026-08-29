@@ -6,7 +6,12 @@ from pathlib import Path
 
 import torch
 
-from train_semseg import recover_training_state, save_checkpoint, trim_uncommitted_results, validate_resume_args
+from tasks.refseg.checkpoint import (
+    recover_training_state,
+    save_checkpoint,
+    trim_uncommitted_results,
+    validate_resume_args,
+)
 
 
 class SemsegCheckpointRecoveryTest(unittest.TestCase):

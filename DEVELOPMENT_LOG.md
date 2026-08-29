@@ -1057,3 +1057,23 @@ Verification:
 - Both Shell scripts passed `bash -n`; dry-run expansion confirmed the training command has no test arguments and the independent test command receives the requested preview count.
 - Publication repository full CPU regression passed `53/53`.
 - No server GPU/data evaluation was run locally; the user will upload the incremental code package and run smoke/formal commands in `~/hfsa-transfer/HFSA-main`, conda environment `hfsa`.
+
+## 2026-08-30: Add Single-Image RefSeg Inference Boundary
+
+Scope:
+- Added `tasks/refseg/inference.py` with `RefSegPredictor` and `RefSegPrediction` for arbitrary image plus referring-expression inference.
+- The predictor strictly loads the full task checkpoint, restores checkpoint model/input/OpenCLIP settings, uses the stored validation threshold, and generates online OpenCLIP token features with the same `return_tokens=True` path used by training caches.
+- Outputs are restored to the original image size and may be saved as binary mask, probability image, overlay and JSON metadata.
+- Added module CLI support through `python -m tasks.refseg.inference` for direct smoke/debug use; the future outer router can import the same predictor.
+- Removed the obsolete `train_semseg.py` compatibility entry as explicitly confirmed by the user. Tests now import the actual `tasks.refseg.engine` and `tasks.refseg.checkpoint` interfaces; the historical preset calls `train_refseg.py`.
+- Recorded ADR-0025 and ADR-0026. The future router uses manual task selection and preserves task-specific inputs/outputs: RefSeg image+text -> mask, counting image+target text -> count/boxes, classification image -> class probabilities.
+- Backbone, Neck, OpenCLIP implementation, `TextPromptSegment`, Loss, data protocol, training loop and checkpoint tensor format were unchanged.
+
+Verification:
+- Python compilation passed for the new module, package export and affected tests.
+- RefSeg inference/script directed tests passed `10/10`.
+- Complete publication CPU regression passed `56/56` with `CUDA_VISIBLE_DEVICES=""`.
+- Complete active-copy CPU regression passed `57/57`; the active copy contains one additional local regression test, while the synchronized RefSeg files match the publication hashes.
+- Real CPU smoke strictly loaded `runs/semseg/srp_yolov12m_axis/weights/best_raw.pt` at epoch 44, used frozen threshold `0.70`, image `03600.jpg`, prompt `The gray small windmill`, and `imgsz=512`.
+- The real smoke restored an `800 x 800` mask with 1,976 positive pixels (`0.0030875` foreground ratio), reported `435.69 ms` for online text encoding plus model inference on CPU after model initialization, and saved mask/probability/overlay/JSON under `tmp/refseg_inference_smoke_512_20260830`.
+- The smoke is an interface/compatibility check, not a formal latency benchmark or new model-quality result.

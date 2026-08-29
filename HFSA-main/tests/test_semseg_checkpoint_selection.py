@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from train_semseg import checkpoint_improvement_flags, select_test_checkpoint
+from tasks.refseg.checkpoint import checkpoint_improvement_flags, select_test_checkpoint
 
 
 class SemsegCheckpointSelectionTest(unittest.TestCase):

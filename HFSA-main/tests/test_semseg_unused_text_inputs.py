@@ -8,7 +8,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dataset.rrsisd_refseg_dataset import _load_text_embeddings
-from train_semseg import predict_with_optional_text
+from tasks.refseg.engine import predict_with_optional_text
 
 
 class UnusedTextInputCleanupTest(unittest.TestCase):

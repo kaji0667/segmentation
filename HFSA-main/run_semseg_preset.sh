@@ -107,4 +107,4 @@ case "$preset" in
     ;;
 esac
 
-python train_semseg.py "${common_args[@]}" "${preset_args[@]}" "${test_args[@]}" "$@"
+python train_refseg.py "${common_args[@]}" "${preset_args[@]}" "${test_args[@]}" "$@"

@@ -38,7 +38,7 @@ HFSA 面向“太空智算背景下的多模态遥感大模型应用探索”。
 
 - `HFSA-main/train.py`：文本引导目标检测训练入口。
 - `HFSA-main/val.py`：文本引导目标检测验证和可视化入口。
-- `HFSA-main/train_semseg.py`：文本引导语义/指代表达分割训练入口。
+- `HFSA-main/train_refseg.py` / `test_refseg.py`：文本引导指代表达分割正式训练与测试入口。
 - `HFSA-main/dataset/`：VOC、RRSIS-D 数据准备、文本嵌入预计算、数据集校验。
 - `HFSA-main/text_encoder/`：文本引导检测的训练器、验证器、模型、损失、匹配、短语分类、空间关系增强和嵌入读取。
 - `HFSA-main/ultralytics/`：本项目随仓库携带的 Ultralytics 代码和自定义 YOLOv12/语义分割配置。
@@ -143,7 +143,7 @@ HFSA 面向“太空智算背景下的多模态遥感大模型应用探索”。
 1. 数据准备层：`dataset/voc_object_dataset.py`、`dataset/rrsisd_refseg_dataset.py`、`dataset/precompute_text_embeddings.py`、`dataset/utils.py`。
 2. 文本引导检测层：`text_encoder/trainer.py`、`text_encoder/validator.py`、`text_encoder/model.py`、`text_encoder/losses.py`、`text_encoder/embedding_store.py`、`text_encoder/matching.py`。
 3. 文本与空间增强层：`text_encoder/phrase_classifier.py`、`text_encoder/spatial_embedding.py`、`text_encoder/fusion_blocks.py`。
-4. 训练/验证入口层：`train.py`、`val.py`、`train_semseg.py`。
+4. 训练/验证入口层：`train.py`、`val.py`、`train_refseg.py`、`test_refseg.py`。
 5. 模型配置层：`ultralytics/cfg/models/v12/*.yaml` 和 `ultralytics/nn/modules/*` 中的自定义模块。
 6. 实验产物层：`pre_datasets/`、`runs/`、checkpoint、embedding cache、结果图表。
 
@@ -207,7 +207,7 @@ HFSA 面向“太空智算背景下的多模态遥感大模型应用探索”。
 ### 训练相关测试要求
 
 - 训练循环改动必须至少跑 `--epochs 1`、小 `--batch`、小 `--imgsz`、有限 batch 的 smoke test。
-- 分割训练改动优先使用 `train_semseg.py` 的 `--max-batches` 和 `--max-val-batches` 控制成本。
+- 分割训练改动优先使用 `train_refseg.py` 的 `--max-batches` 和 `--max-val-batches` 控制成本。
 - 验证逻辑改动必须记录 `conf`、`iou`、`max_det`、`single_cls`、`agnostic_nms`。
 - 不能运行完整训练时，必须说明原因，并提供可执行的最小验证命令。
 
@@ -375,9 +375,11 @@ Proposed / Accepted / Superseded
 - 部署包不会携带的辅助 preset 或本机脚本不得成为任务脚本的运行时依赖。当前 `train_refseg.sh` 不得重新依赖 `run_semseg_preset.sh`。
 - 如果最终需要统一 `train.py`，它只能作为薄任务分发器：解析任务编号或名称并调用对应 Trainer，不得在分发器中复制或混合各任务的数据、Loss、训练循环和指标实现。
 - 最终用户输入编号或任务名称后的自动切换属于统一推理入口，与训练脚本分离设计；训练阶段仍按任务、数据集和 checkpoint 独立运行。
+- 统一推理入口由用户手动选择任务编号或名称；第一版不得根据自然语言自动猜测任务。选定任务后加载对应 checkpoint，并由任务自身声明必要输入与输出。
+- 任务输入输出不得强制统一：指代分割为图像+指代表达 -> mask，目标计数为图像+目标类别文本 -> 数量/检测框，场景分类为单图 -> 类别概率。公共路由只统一选择、错误、耗时和产物索引等外围元数据。
 - 在所有单任务训练/测试入口完成审计和 smoke 前，不启动联合多数据集、多 Head 同时训练。
 - 已接入的指代分割、场景分类和目标计数任务统一放在 `HFSA-main/tasks/<task>/`；根目录 `train_<task>.py`、`test_<task>.py` 只能作为薄入口，不承载任务内部训练、评测或推理实现。
-- 指代分割正式入口为 `train_refseg.py` 与 `test_refseg.py`；`train_semseg.py` 只作为历史命令兼容层，不得重新堆入业务逻辑。
+- 指代分割正式入口为 `train_refseg.py` 与 `test_refseg.py`；已删除的 `train_semseg.py` 不得恢复为兼容入口或业务实现。
 - 任务包只统一边界和依赖方向，不强制拥有完全相同的文件。自定义训练循环可以拥有专用 checkpoint 管理器；使用 Ultralytics Trainer 的任务继续复用框架 checkpoint，不建立无意义空模块。
 - 目标检测 `train.py`、`val.py` 与 `text_encoder/` 在用户明确安排其重构前保持原状，不因其他任务的目录统一而顺带移动。
 - 队友或外部任务仓库只允许作为临时审计输入；完成 Head、Loss、数据、Trainer、推理和评测接入后，最终活动目录与发布仓库不得保留其完整源码快照、嵌套 Git 或运行时依赖。算法来源以 ADR 中的仓库地址和 commit 记录追溯。
@@ -421,7 +423,7 @@ Proposed / Accepted / Superseded
 2. 项目状态以根目录 `CURRENT_STATE.md`、`ARCHITECTURE.md`、`DEVELOPMENT_LOG.md` 和 `ADR/` 为准；新对话开始时应先读取这些文件。
 3. `hfsa_env/`、`data/`、`runs/`、`pretrain_model/`、`*.pt` 等大体积或环境内容混在项目目录中，存在误扫描、误提交和上下文污染风险。
 4. 训练入口与部分工具函数存在重复解析逻辑，后续应收敛到单一工具模块。
-5. `train_semseg.py` 文件承担参数、数据、训练、验证、绘图、checkpoint 等多种职责，后续应按模块逐步拆分。
+5. `tasks/refseg/engine.py` 仍集中参数、数据、训练、验证和绘图等职责，后续应按模块逐步拆分。
 6. MinerU Markdown 中的公式、表格和 OCR 文本可能存在转换误差，部分插图依赖外部 CDN；关键结论必须按“资料来源与阅读规则”交叉核对。
 
 ## 推荐开发顺序
@@ -431,7 +433,7 @@ Proposed / Accepted / Superseded
 3. 最小可复现路径：整理检测和分割各自的最小 smoke test 命令。
 4. 数据集校验：完善 VOC/RRSIS-D 数据校验和小样本测试。
 5. 文本嵌入缓存：统一 embedding metadata、sample_id 对齐检查和错误提示。
-6. 训练脚本拆分：优先拆分 `train_semseg.py` 中的数据、指标、绘图、checkpoint 逻辑。
+6. 分割引擎拆分：优先拆分 `tasks/refseg/engine.py` 中的数据、指标和绘图逻辑。
 7. 模型与评估增强：在稳定测试和文档基础上再改 loss、fusion、head 或 strict grounding。
 
 ## 规则变更记录
@@ -469,6 +471,13 @@ Proposed / Accepted / Superseded
 - 指代分割新增独立 `train_refseg.py`、`test_refseg.py`；旧 `train_semseg.py` 保留为兼容转发。
 - 指代分割完整恢复逻辑归入 `RefSegCheckpointManager`；分类使用自身 Head checkpoint，计数复用 Ultralytics 检测 checkpoint，禁止为了目录对称制造无用实现。
 - 本次目录统一明确不涉及目标检测，后续只有在用户单独确认后才处理 `train.py`、`val.py` 与 `text_encoder/`。
+
+### 2026-08-30 手动推理路由与历史入口清理补充
+
+- 删除 `train_semseg.py` 历史兼容入口，指代分割正式入口固定为 `train_refseg.py` 和 `test_refseg.py`。
+- 统一推理入口采用用户手动任务选择，不在第一版中自动推断任务意图。
+- 明确各任务保留自身输入与输出契约；总路由不得把场景分类、目标计数和指代分割强制包装成相同的图像文本输入或 mask 输出。
+- 指代分割单图推理由 `tasks/refseg/inference.py` 承担，必须复用训练一致的 OpenCLIP token 特征和 checkpoint validation 阈值。
 
 ## 追加说明：跨线程上下文补充
 
@@ -534,7 +543,7 @@ WSL：
 
 ```bash
 cd /mnt/d/code/python/HFSA/HFSA-main
-python train_semseg.py \
+python train_refseg.py \
   --data pre_datasets/RRSIS-D_refseg/data.yaml \
   --text-queries \
   --text-encoder openclip \
@@ -549,7 +558,7 @@ Windows PowerShell：
 
 ```powershell
 cd D:\code\python\HFSA\HFSA-main
-python train_semseg.py --data pre_datasets/RRSIS-D_refseg/data.yaml --text-queries --text-encoder openclip --epochs 1 --batch 2 --imgsz 128 --max-batches 2 --max-val-batches 2
+python train_refseg.py --data pre_datasets/RRSIS-D_refseg/data.yaml --text-queries --text-encoder openclip --epochs 1 --batch 2 --imgsz 128 --max-batches 2 --max-val-batches 2
 ```
 
 运行前必须确认当前环境具备项目依赖。若缺少 PyTorch 或 OpenCLIP，只能记录为“未完成训练 smoke test”。

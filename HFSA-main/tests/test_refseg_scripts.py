@@ -11,7 +11,7 @@ import torch
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from train_semseg import parse_args, resolve_checkpoint_path, validate
+from tasks.refseg.engine import parse_args, resolve_checkpoint_path, validate
 
 
 class _PreviewModel:
@@ -30,12 +30,7 @@ class _PreviewModel:
 
 class RefSegScriptsTest(unittest.TestCase):
     def test_eval_only_arguments_are_available(self):
-        with patch.object(
-            sys,
-            "argv",
-            ["train_semseg.py", "--eval-only", "--checkpoint", "weights/example.pt"],
-        ):
-            args = parse_args()
+        args = parse_args(["--eval-only", "--checkpoint", "weights/example.pt"])
 
         self.assertTrue(args.eval_only)
         self.assertEqual(args.checkpoint, "weights/example.pt")

@@ -270,3 +270,11 @@
 - 独立测试新增 `TEST_PREVIEW_BATCHES`，默认 `5`，输出 `test_batch0_pred.jpg`、`test_batch1_pred.jpg` 等；实际测试 batch 少于请求数时只生成存在的部分。
 - `test_results.json` 记录请求数量与实际预览文件列表；指标、验证阈值、最佳 checkpoint 选择和模型计算均未变化。
 - 定向测试 `7/7`、Shell 语法/展开检查和全库 CPU 回归 `53/53` 通过；服务器真实 GPU smoke 与正式运行由用户上传增量包后执行。
+
+### 36. 指代分割单图推理与手动总路由边界
+
+- 新增 `tasks/refseg/inference.py`：`RefSegPredictor` 输入单张图像和非空指代表达，严格加载完整 checkpoint，在线生成训练同口径 OpenCLIP token features，并按 checkpoint validation 阈值输出原图尺寸 mask。
+- `RefSegPrediction` 可保存 mask、概率图、叠加图和 JSON；模块支持 `python -m tasks.refseg.inference`，也可供未来最外层路由直接调用。
+- 总路由已确认由用户手动选择任务；分类只要求图像，计数要求图像和目标文本，指代分割要求图像和指代表达，各任务保留自身输出。
+- 按用户确认删除 `train_semseg.py`；测试改为直接引用 `tasks.refseg.engine` / `checkpoint`，历史 preset 改调 `train_refseg.py`。
+- 验证：RefSeg 定向 `10/10`、发布仓库全库 CPU `56/56`、活动副本 `57/57`；真实 YOLOv12m epoch-44 checkpoint 在 CPU/512 输入上完成单图端到端 smoke 并生成可视化产物。

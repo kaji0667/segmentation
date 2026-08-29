@@ -4,7 +4,7 @@
 
 ## 指代语义分割
 
-训练脚本已经内置当前正式 baseline 的全部参数，直接调用 `train_refseg.py`，不依赖 `run_semseg_preset.sh`。独立评测调用 `test_refseg.py`；旧 `train_semseg.py` 仅保留为兼容入口。
+训练脚本已经内置当前正式 baseline 的全部参数，直接调用 `train_refseg.py`，不依赖 `run_semseg_preset.sh`。独立评测调用 `test_refseg.py`；旧 `train_semseg.py` 已删除。
 
 训练（每轮执行 validation，训练结束后保留最佳 checkpoint；不会自动执行 test）：
 

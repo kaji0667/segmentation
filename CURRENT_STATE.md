@@ -1,6 +1,15 @@
 # CURRENT_STATE.md
 
-最后更新：2026-08-28
+最后更新：2026-08-30
+
+## 2026-08-30 最新状态：指代分割单图推理边界
+
+- 新增 `tasks/refseg/inference.py::RefSegPredictor`：严格加载完整 RefSeg checkpoint，读取其中的模型 YAML、输入尺寸、OpenCLIP 配置和 validation 最佳阈值。
+- 单图推理输入固定为“遥感图像 + 非空指代表达”，在线文本编码使用与训练缓存一致的 OpenCLIP token features；输出恢复到原图尺寸的 probability、二值 mask 和叠加图。
+- 新增 `RefSegPrediction`，可保存 `*_mask.png`、`*_probability.png`、`*_overlay.png` 和 JSON 元数据；支持 `python -m tasks.refseg.inference` 独立运行，也可被未来总路由直接导入。
+- 总路由边界已由用户和师兄确认：用户手动选择任务，路由加载对应 checkpoint，再由任务声明自身输入；分类只需要图像，计数需要图像和目标文本，指代分割需要图像和指代表达。各任务输出不强制统一。
+- 已删除旧 `train_semseg.py` 兼容入口；训练和测试正式入口保持 `train_refseg.py`、`test_refseg.py`。
+- 本次不修改 Backbone、Neck、OpenCLIP、`TextPromptSegment`、Loss、训练循环、数据协议或 checkpoint tensor 格式。
 
 ## 2026-08-28 最新状态：测试预览扩展为前 N 个 batch
 
@@ -15,7 +24,7 @@
 
 - 指代分割、场景分类和目标计数现统一位于 `HFSA-main/tasks/refseg/`、`tasks/classification/`、`tasks/counting/`；原根目录 `classification/`、`counting/` 源码目录已移除。
 - 三项任务均采用独立薄入口：`train_refseg.py`/`test_refseg.py`、`train_classification.py`/`test_classification.py`、`train_counting.py`/`test_counting.py`。Shell 脚本已调用这些入口。
-- 旧 `train_semseg.py` 只保留兼容转发和历史 helper 导出；实际指代分割实现位于 `tasks/refseg/engine.py`。
+- 旧 `train_semseg.py` 兼容入口已删除；实际指代分割实现位于 `tasks/refseg/engine.py`。
 - 分割 checkpoint 保存、raw-best 选择、resume 协议、RNG 和 CSV 恢复包装为 `tasks/refseg/checkpoint.py::RefSegCheckpointManager`。分类仍由自身 Trainer 保存 Head checkpoint；计数仍复用 Ultralytics 检测 checkpoint。
 - 目标检测 `train.py`、`val.py` 和 `text_encoder/` 本次没有修改，也没有建立 `tasks/detection/`。
 - 发布副本与活动副本变更文件哈希一致；两边最终全量 CPU 回归均为 `51/51`。新入口真实 CPU smoke 已完成：分割 1 个 test batch、分类 1 个 test batch；计数因缺少真实数据和训练 checkpoint 仍以静态构建与专项回归为验证边界。
@@ -25,7 +34,7 @@
 
 - `srp_yolov12m_axis_clean_empty` 已在 epoch 39 早停，raw-best epoch 31、阈值 `0.80`；完整 cleaned test 为 `oIoU=0.693618`、`mIoU=0.539086`。
 - 旧 epoch-44 checkpoint 在相同 3,480 条 cleaned test 的公平复评为 `oIoU=0.702938`、`mIoU=0.552721`，且五档 Pr、Precision、Recall、F1 全部高于新训练。因此保留空 mask 清洗规则，但不替换当前发布 checkpoint。
-- checkpoint 文件锁恢复能力已同步回活动副本 canonical `train_semseg.py`；活动副本与发布副本的分割恢复逻辑一致。
+- checkpoint 文件锁恢复能力位于 `tasks/refseg/checkpoint.py`；活动副本与发布副本的分割恢复逻辑一致。
 - 目标计数的 `CountingDetect`、任务包、训练/测试入口和脚本已确认存在于活动副本，不再只存在于发布副本。
 - 已基于 `zhuoletian-collab/changjingfenlei@688c2a9` 完成 `SceneClassifyHead`、`SceneClassificationLoss`、m-scale YAML、类化数据/配置/训练/推理/评测和独立脚本接入；上游源码快照已从活动目录和发布仓库移除，仅由 ADR 保留 commit 溯源。
 - 场景分类已完成独立复核：单图推理不再依赖数据集目录，`--split all` 可正确合并显式 train/val/test，训练 DataLoader 不会向含 `BatchNorm1d` 的 Head 送入末尾单样本 batch。
@@ -36,14 +45,14 @@
 - 当前个人负责的任务是 RRSIS-D 文本引导单目标二值分割：输入遥感图像与自由文本描述，输出对应目标的 `[B,1,H,W]` mask。
 - 团队已确认多任务共用 YOLOv12m Backbone 和 Neck；当前分割分支使用匹配的 `yolov12m-semseg.yaml`、`yolov12m.pt`、P3/P4/P5 和 ADR-0015 `TextPromptSegment` 语义角色 token pooling Head。
 - 未经用户确认，不修改 Backbone、Neck、OpenCLIP 或其他成员任务实现。
-- 当前发布代码已包含空 mask 清洗与 checkpoint 恢复、目标计数和场景分类接入；活动副本的 canonical `train_semseg.py`、计数/分类实现和完整测试集合均已与发布副本同步。活动目录和发布仓库均不再携带队友完整源码仓库。
+- 当前发布代码已包含空 mask 清洗与 checkpoint 恢复、目标计数和场景分类接入；指代分割正式实现统一位于 `tasks/refseg/`。活动目录和发布仓库均不再携带队友完整源码仓库。
 
 ## 已完成的分割任务封装
 
-- `HFSA-main/scripts/train_refseg.sh` 是自包含训练脚本，直接调用 `train_semseg.py`，内置当前正式 YOLOv12m baseline 参数，不依赖部署时不会携带的 `run_semseg_preset.sh`。
+- `HFSA-main/scripts/train_refseg.sh` 是自包含训练脚本，直接调用 `train_refseg.py`，内置当前正式 YOLOv12m baseline 参数，不依赖部署时不会携带的 `run_semseg_preset.sh`。
 - 训练脚本通过自身位置定位 `HFSA-main`；数据、模型、权重和输出均使用项目相对路径，并允许通过环境变量或末尾 CLI 参数覆盖。
 - `HFSA-main/scripts/test_refseg.sh` 支持已有 checkpoint 的独立测试，默认输出到单独目录，不重新训练，也不覆盖原训练目录。
-- 正式独立测试入口为 `test_refseg.py`；兼容层 `train_semseg.py --eval-only --checkpoint` 仍可使用。两者都只构建 test split，严格加载完整 checkpoint，并复用 checkpoint 中冻结的 validation 阈值与选模指标。
+- 正式独立测试入口为 `test_refseg.py`；它只构建 test split，严格加载完整 checkpoint，并复用 checkpoint 中冻结的 validation 阈值与选模指标。
 - 该封装通过 Shell 语法检查、参数展开检查、Python 编译、全库测试和 2-batch CUDA evaluation-only smoke。
 
 ## 当前数据协议
@@ -62,7 +71,7 @@
 ## 多任务训练整合结论
 
 - 不把检测、指代分割、计数、分类等任务的数据加载、Loss、训练循环和评测逻辑强行合并到一个巨型 `train.py`。
-- 每个任务保留自己的 Trainer/训练文件和任务脚本，例如检测使用现有 `train.py`，分割使用 `train_semseg.py`，其他任务按相同规范提供独立入口。
+- 每个任务保留自己的 Trainer/训练文件和任务脚本，例如检测使用现有 `train.py`，分割使用 `train_refseg.py`，其他任务按相同规范提供独立入口。
 - 如果最终需要统一训练命令，公共 `train.py` 只能作为薄分发器：解析 `--task` 后调用对应任务 Trainer，不在分发器中实现具体数据、Loss 或指标逻辑。
 - 最终“输入 1/2/3/4/5 或任务名称后切换任务”属于统一推理入口，与训练脚本分开设计；训练脚本不承担在线任务切换。
 - 该决策记录在 ADR-0020。
