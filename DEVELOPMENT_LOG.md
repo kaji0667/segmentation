@@ -1077,3 +1077,22 @@ Verification:
 - Real CPU smoke strictly loaded `runs/semseg/srp_yolov12m_axis/weights/best_raw.pt` at epoch 44, used frozen threshold `0.70`, image `03600.jpg`, prompt `The gray small windmill`, and `imgsz=512`.
 - The real smoke restored an `800 x 800` mask with 1,976 positive pixels (`0.0030875` foreground ratio), reported `435.69 ms` for online text encoding plus model inference on CPU after model initialization, and saved mask/probability/overlay/JSON under `tmp/refseg_inference_smoke_512_20260830`.
 - The smoke is an interface/compatibility check, not a formal latency benchmark or new model-quality result.
+
+## 2026-08-31: Add Local Web Interface and Task Routing Shell
+
+Scope:
+- Added `web_app.py`, a dependency-free local HTTP entry based on Python's standard library, with health, task-catalog and pending-prediction endpoints.
+- Added a responsive native HTML/CSS/JavaScript interface with three manual task cards, image drag/drop preview, task-specific dynamic text fields, result placeholders and mobile layout rules.
+- Added `tasks/routing/config.py`, `registry.py` and `router.py` for JSON-serializable metadata, distinct task input/output contracts, input validation, lazy Adapter registration, instance reuse and release.
+- Classification requires only an image; counting requires image plus target class; RefSeg requires image plus referring expression. The browser reads this schema from `/api/tasks` rather than maintaining a second hard-coded contract.
+- No task Adapter is registered yet. `/api/predict` validates the request and returns HTTP 503 with `interface_pending`; no model is loaded and no mock prediction is presented as a real result.
+- Added ADR-0027 and `HFSA-main/WEB_APP.md`. Public IP, domain, HTTPS, authentication and reverse-proxy work remain deferred.
+
+Verification:
+- Python compilation passed for the web entry, routing package and tests.
+- JavaScript syntax validation passed with Node.js `--check`.
+- Web/routing directed tests passed `6/6`, including real ephemeral HTTP server requests.
+- Complete publication CPU regression passed `62/62` with `CUDA_VISIBLE_DEVICES=""`.
+- Complete active-copy CPU regression passed `63/63`; its additional pre-existing resource-helper regression also remained green.
+- Edge/Playwright at `1440 x 1000` and `390 x 844` viewports loaded the page, rendered three cards, selected RefSeg, created one dynamic text field and reported no application JavaScript error after favicon handling was added.
+- Visual inspection confirmed the desktop selected-state/two-column workspace and the single-column mobile layout render as designed.

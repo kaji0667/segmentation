@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="HFSA 多模态遥感智能分析界面" />
+    <title>HFSA 遥感智能分析</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <main class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="HFSA 首页">
+          <span class="brand-mark" aria-hidden="true">
+            <span class="orbit"></span>
+            <span class="core"></span>
+          </span>
+          <span>
+            <strong>HFSA</strong>
+            <small>REMOTE SENSING INTELLIGENCE</small>
+          </span>
+        </a>
+        <div class="system-state"><span></span> 界面服务已连接</div>
+      </header>
+
+      <section class="hero" id="top">
+        <div class="eyebrow">面向太空智算的多模态遥感应用</div>
+        <h1>让遥感图像分析<br /><span>更直观，也更简单</span></h1>
+        <p>选择需要的分析能力，上传一张遥感图像。任务模型接口将在当前界面架构上逐项接入。</p>
+        <div class="steps" aria-label="操作步骤">
+          <span><b>01</b> 选择任务</span>
+          <i></i>
+          <span><b>02</b> 提供图像</span>
+          <i></i>
+          <span><b>03</b> 查看结果</span>
+        </div>
+      </section>
+
+      <section class="task-section" aria-labelledby="task-heading">
+        <div class="section-heading">
+          <div>
+            <span class="section-index">01</span>
+            <h2 id="task-heading">选择分析任务</h2>
+          </div>
+          <p>不同任务保留各自所需的输入与结果形式</p>
+        </div>
+        <div class="task-grid" id="task-grid" aria-live="polite">
+          <div class="loading-card">正在读取任务配置…</div>
+        </div>
+      </section>
+
+      <section class="workspace" id="workspace" aria-labelledby="workspace-heading">
+        <div class="workspace-header">
+          <div>
+            <span class="section-index">02</span>
+            <h2 id="workspace-heading">分析工作区</h2>
+          </div>
+          <div class="selected-task-badge" id="selected-task-badge">请先选择任务</div>
+        </div>
+
+        <div class="workspace-grid">
+          <section class="input-panel panel">
+            <div class="panel-heading">
+              <div><span>A</span><h3>输入内容</h3></div>
+              <small id="input-summary">图像</small>
+            </div>
+
+            <label class="upload-zone" id="upload-zone" for="image-input">
+              <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp,image/tiff" />
+              <div class="upload-empty" id="upload-empty">
+                <div class="upload-icon" aria-hidden="true">
+                  <span></span>
+                </div>
+                <strong>拖放遥感图像到这里</strong>
+                <p>或点击选择本地文件</p>
+                <small>JPG · PNG · WEBP · TIFF</small>
+              </div>
+              <div class="image-preview-wrap" id="image-preview-wrap" hidden>
+                <img id="image-preview" alt="已上传的遥感图像预览" />
+                <div class="image-meta">
+                  <strong id="image-name"></strong>
+                  <span id="image-size"></span>
+                </div>
+                <button class="replace-image" type="button" id="replace-image">更换图像</button>
+              </div>
+            </label>
+
+            <div class="dynamic-fields" id="dynamic-fields"></div>
+
+            <button class="primary-action" id="run-button" type="button" disabled>
+              <span id="run-label">选择任务后开始</span>
+              <span class="action-arrow" aria-hidden="true">→</span>
+            </button>
+            <p class="form-message" id="form-message" role="status"></p>
+          </section>
+
+          <section class="result-panel panel">
+            <div class="panel-heading">
+              <div><span>B</span><h3 id="result-heading">分析结果</h3></div>
+              <small class="pending-chip">接口待接入</small>
+            </div>
+            <div class="result-stage" id="result-stage">
+              <div class="result-placeholder">
+                <div class="scan-frame" aria-hidden="true">
+                  <span class="corner top-left"></span>
+                  <span class="corner top-right"></span>
+                  <span class="corner bottom-left"></span>
+                  <span class="corner bottom-right"></span>
+                  <span class="scan-line"></span>
+                </div>
+                <strong>结果将在这里呈现</strong>
+                <p id="result-help">选择任务并上传图像，查看对应的输出形式。</p>
+              </div>
+            </div>
+            <div class="output-tags" id="output-tags"></div>
+          </section>
+        </div>
+      </section>
+
+      <footer>
+        <span>HFSA · Multimodal Remote Sensing</span>
+        <span>本地界面原型 · 模型接口逐项接入</span>
+      </footer>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

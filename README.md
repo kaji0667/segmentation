@@ -7,6 +7,8 @@ This repository contains the HFSA task-specific referring-segmentation, object-c
 - `HFSA-main/train_refseg.py` and `HFSA-main/test_refseg.py`: dedicated training and evaluation entries for text-guided binary masks. The obsolete `train_semseg.py` wrapper has been removed.
 - `HFSA-main/dataset/`: RRSIS-D referring segmentation dataset utilities.
 - `HFSA-main/tasks/refseg/inference.py`: single-image RefSeg predictor for image + referring expression -> binary mask, probability map and overlay.
+- `HFSA-main/web_app.py` and `HFSA-main/web/`: dependency-free local browser interface with three task cards, dynamic task inputs and a model-agnostic routing shell.
+- `HFSA-main/tasks/routing/`: JSON-serializable task catalog, input validation and late Adapter registration for classification, counting and RefSeg.
 - `HFSA-main/text_encoder/`: text embedding and text-related helper modules.
 - `HFSA-main/ultralytics/`: local Ultralytics/YOLOv12 code with the semantic segmentation head.
 - `HFSA-main/ultralytics/cfg/models/v12/yolov12-semseg.yaml`: main non-P2 segmentation model.

@@ -185,6 +185,18 @@ Each task owns self-contained `scripts/train_<task>.sh` and `scripts/test_<task>
 
 The inference router uses explicit manual task selection. After selection, each task requests only its own inputs and retains its own output type: RefSeg uses image plus text and returns a mask; counting uses image plus target text and returns count/boxes; classification uses only an image and returns class probabilities. The router must not impose a universal image-text or mask response contract.
 
+## Local Web Interface and Routing Shell
+
+`HFSA-main/web_app.py` is the current local browser entry. It uses the Python standard-library HTTP server and serves dependency-free assets from `HFSA-main/web/`; no model framework is imported merely to render the page. The browser reads `/api/tasks`, renders three manual task cards and builds the input form from the task-owned schema.
+
+`HFSA-main/tasks/routing/` separates the stable control-plane boundary from pending model interfaces:
+
+- `config.py` owns JSON-serializable task/input/output definitions.
+- `registry.py` owns display order, project-relative checkpoint defaults, user-facing labels and the three distinct contracts.
+- `router.py` owns task lookup, schema validation, lazy Adapter factory registration, instance reuse and release.
+
+At the current stage no Adapter is registered by default. `/api/predict` validates the selected task and inputs, then returns `interface_pending`. RefSeg, counting and classification must later receive separate thin Adapters around their existing task-owned inference classes. Public hosting, authentication, HTTPS and reverse proxy configuration remain outside this local interface module.
+
 ## Text-Guided Object Counting Task
 
 The teammate counting task is now integrated as a detection-compatible task boundary rather than a copied repository. Its algorithm remains:

@@ -1,6 +1,16 @@
 # CURRENT_STATE.md
 
-最后更新：2026-08-30
+最后更新：2026-08-31
+
+## 2026-08-31 最新状态：本地 Web 界面与路由骨架
+
+- 新增 `HFSA-main/web_app.py` 和 `HFSA-main/web/`，使用 Python 标准库与原生 HTML/CSS/JavaScript 提供无需新增依赖的本地浏览器界面。
+- 页面包含三个任务卡片、图像拖放/预览、任务动态文本输入、结果占位区和响应式布局；默认访问地址为 `http://127.0.0.1:7860`。
+- 新增 `tasks/routing/`，三任务配置可序列化为 JSON，并严格保留分类仅图像、计数图像+目标类别、指代分割图像+描述的不同契约。
+- `TaskRouter` 已支持输入校验、延迟 Adapter 注册、实例缓存和释放。当前三个真实模型 Adapter 均未接入，`/api/predict` 返回明确的 `interface_pending`，不伪装成真实推理结果。
+- 页面启动不会导入或加载 PyTorch、OpenCLIP 或任务模型；公网 IP、域名、HTTPS、鉴权和反向代理留到部署阶段处理。
+- 本阶段不修改任何 Backbone、Neck、OpenCLIP、任务 Head、Loss、训练流程或 checkpoint 格式。
+- Web/路由定向测试通过 `6/6`，发布仓库全量 CPU 回归通过 `62/62`，活动副本通过 `63/63`；Edge/Playwright 完成 1440px 桌面与 390px 移动端视觉检查，无 JavaScript 页面错误。
 
 ## 2026-08-30 最新状态：指代分割单图推理边界
 
