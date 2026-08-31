@@ -29,13 +29,6 @@
         <div class="eyebrow">面向太空智算的多模态遥感应用</div>
         <h1>让遥感图像分析<br /><span>更直观，也更简单</span></h1>
         <p>选择需要的分析能力，上传一张遥感图像。任务模型接口将在当前界面架构上逐项接入。</p>
-        <div class="steps" aria-label="操作步骤">
-          <span><b>01</b> 选择任务</span>
-          <i></i>
-          <span><b>02</b> 提供图像</span>
-          <i></i>
-          <span><b>03</b> 查看结果</span>
-        </div>
       </section>
 
       <section class="task-section" aria-labelledby="task-heading">
@@ -44,14 +37,14 @@
             <span class="section-index">01</span>
             <h2 id="task-heading">选择分析任务</h2>
           </div>
-          <p>不同任务保留各自所需的输入与结果形式</p>
+          <p id="task-count">正在读取任务配置…</p>
         </div>
         <div class="task-grid" id="task-grid" aria-live="polite">
           <div class="loading-card">正在读取任务配置…</div>
         </div>
       </section>
 
-      <section class="workspace" id="workspace" aria-labelledby="workspace-heading">
+      <section class="workspace" id="workspace" aria-labelledby="workspace-heading" hidden>
         <div class="workspace-header">
           <div>
             <span class="section-index">02</span>

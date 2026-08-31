@@ -66,6 +66,8 @@ class WebRoutingTest(unittest.TestCase):
             with urlopen(f"http://{host}:{port}/", timeout=3) as response:
                 html = response.read().decode("utf-8")
                 self.assertIn("HFSA 遥感智能分析", html)
+                self.assertNotIn('class="steps"', html)
+                self.assertRegex(html, r'<section class="workspace" id="workspace"[^>]*hidden>')
         finally:
             server.shutdown()
             server.server_close()

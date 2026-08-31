@@ -1096,3 +1096,8 @@ Verification:
 - Complete active-copy CPU regression passed `63/63`; its additional pre-existing resource-helper regression also remained green.
 - Edge/Playwright at `1440 x 1000` and `390 x 844` viewports loaded the page, rendered three cards, selected RefSeg, created one dynamic text field and reported no application JavaScript error after favicon handling was added.
 - Visual inspection confirmed the desktop selected-state/two-column workspace and the single-column mobile layout render as designed.
+
+Follow-up interface review:
+- Removed the decorative three-step strip after direct user review.
+- Replaced the oversized three-card layout with compact configuration-driven task items using `auto-fit`, so additional task definitions can be appended without redesigning the section.
+- Hid the complete analysis workspace until a user selects a task; selection then reveals the task-owned inputs and scrolls to the workspace.

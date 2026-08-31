@@ -6,6 +6,7 @@ const state = {
 };
 
 const taskGrid = document.querySelector("#task-grid");
+const taskCount = document.querySelector("#task-count");
 const workspace = document.querySelector("#workspace");
 const selectedBadge = document.querySelector("#selected-task-badge");
 const inputSummary = document.querySelector("#input-summary");
@@ -50,14 +51,14 @@ function renderTasks() {
     card.className = "task-card";
     card.dataset.taskId = task.task_id;
     card.style.setProperty("--accent", task.accent_color);
+    card.setAttribute("aria-pressed", "false");
     card.innerHTML = `
-      <span class="task-card-top">
-        <span class="task-icon" aria-hidden="true">${iconCharacters[task.icon] || "◇"}</span>
-        <span class="task-status">INTERFACE READY</span>
+      <span class="task-icon" aria-hidden="true">${iconCharacters[task.icon] || "◇"}</span>
+      <span class="task-copy">
+        <strong>${task.title}</strong>
+        <small>${task.description}</small>
       </span>
-      <h3>${task.title}</h3>
-      <p>${task.description}</p>
-      <span class="task-link">选择此任务&nbsp; →</span>
+      <span class="task-chevron" aria-hidden="true">→</span>
     `;
     card.addEventListener("click", () => selectTask(task.task_id));
     taskGrid.appendChild(card);
@@ -87,8 +88,11 @@ function selectTask(taskId) {
   state.selectedTask = task;
   document.documentElement.style.setProperty("--task-accent", task.accent_color);
   document.querySelectorAll(".task-card").forEach((card) => {
-    card.classList.toggle("selected", card.dataset.taskId === taskId);
+    const selected = card.dataset.taskId === taskId;
+    card.classList.toggle("selected", selected);
+    card.setAttribute("aria-pressed", String(selected));
   });
+  workspace.hidden = false;
   selectedBadge.textContent = `${task.title} · ${task.technical_name}`;
   selectedBadge.classList.add("active");
   inputSummary.textContent = task.inputs.map((field) => field.label.replace("上传", "")).join(" + ");
@@ -192,6 +196,7 @@ async function initialize() {
     if (!response.ok) throw new Error("Task API unavailable");
     const payload = await response.json();
     state.tasks = payload.tasks || [];
+    taskCount.textContent = `当前已配置 ${state.tasks.length} 项能力 · 更多任务可继续接入`;
     renderTasks();
   } catch (error) {
     taskGrid.innerHTML = '<div class="loading-card">任务配置读取失败，请重新启动本地服务。</div>';
