@@ -1131,3 +1131,4 @@ Follow-up interface review:
 - 删除两个历史 checkpoint 测试文件，严格单-checkpoint与纯推理 payload校验并入 `test_refseg_scripts.py`。
 - 不修改其他任务 checkpoint、共享 Backbone/Neck、OpenCLIP、Head、Loss 或数据协议。
 - 活动副本已完成 Windows 编译、RefSeg 定向 `9/9`、WSL 全库 CPU `67/67` 和 1-batch CPU smoke；发布副本完成定向 `9/9`、全库 CPU `65/65` 和独立 1-batch CPU smoke。两次 smoke 均只生成 `weights/best_raw.pt`，payload keys 为 `args/data/epoch/format/metrics/model`。
+- 实现提交 `3c65c9c refactor(refseg): enforce one checkpoint` 已成功推送到 GitHub `main`。

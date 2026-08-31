@@ -317,3 +317,4 @@
 - 训练和训练后 test 只使用 `weights/best_raw.pt`，其中不包含 optimizer、scheduler、RNG 或恢复状态。
 - 删除 `test_semseg_checkpoint_recovery.py` 和 `test_semseg_checkpoint_selection.py`，必要校验并入 `test_refseg_scripts.py`。
 - 新增 ADR-0029；发布副本定向 `9/9`、全库 CPU `65/65`、1-batch CPU smoke 通过；其他任务与共享模型结构不变。
+- 实现提交 `3c65c9c` 已推送到 GitHub `main`。

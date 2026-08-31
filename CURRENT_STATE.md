@@ -7,6 +7,7 @@
 - RefSeg 训练唯一 checkpoint 为 `weights/best_raw.pt`；payload 只包含模型、参数、数据配置、epoch、格式和指标。
 - 已删除 `--resume`、optimizer/scheduler/RNG 恢复 checkpoint、旧 `best.pt` 自动回退，以及对应的两个历史测试文件。
 - 必要的严格单-checkpoint校验并入 `test_refseg_scripts.py`；RefSeg 定向 `9/9`、全库 CPU `65/65` 与 1-batch CPU smoke 通过，smoke 仅生成 `weights/best_raw.pt`。
+- 实现提交 `3c65c9c` 已推送到 GitHub `main`。
 - 本次不修改检测、计数、分类的 checkpoint 机制，也不修改 Backbone、Neck、OpenCLIP、Head、Loss 或数据协议。
 
 ## 2026-08-31 最新状态：Web 语义分割真实模型接入
