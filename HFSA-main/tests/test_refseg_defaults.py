@@ -8,7 +8,7 @@ from tasks.refseg.engine import parse_args
 from ultralytics.nn.tasks import yaml_model_load
 
 
-class YOLOv12mDefaultsTest(unittest.TestCase):
+class RefSegDefaultsTest(unittest.TestCase):
     def test_training_defaults_use_matching_medium_model_and_weights(self):
         args = parse_args([])
 

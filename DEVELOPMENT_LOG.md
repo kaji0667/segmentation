@@ -1132,3 +1132,9 @@ Follow-up interface review:
 - 不修改其他任务 checkpoint、共享 Backbone/Neck、OpenCLIP、Head、Loss 或数据协议。
 - 活动副本已完成 Windows 编译、RefSeg 定向 `9/9`、WSL 全库 CPU `67/67` 和 1-batch CPU smoke；发布副本完成定向 `9/9`、全库 CPU `65/65` 和独立 1-batch CPU smoke。两次 smoke 均只生成 `weights/best_raw.pt`，payload keys 为 `args/data/epoch/format/metrics/model`。
 - 实现提交 `3c65c9c refactor(refseg): enforce one checkpoint` 已成功推送到 GitHub `main`。
+
+## 2026-08-31 RefSeg 测试文件命名与合并
+
+- 将三个当前 Head 测试合并为 `test_refseg_head.py`，并将文本输入、YOLOv12m 默认测试改为 `refseg` 命名。
+- 原 Head 9 条、文本输入 2 条、默认配置 2 条测试全部保留，没有修改运行时代码。
+- 新文件定向 `13/13`、发布仓库全库 CPU `65/65` 通过。

@@ -318,3 +318,8 @@
 - 删除 `test_semseg_checkpoint_recovery.py` 和 `test_semseg_checkpoint_selection.py`，必要校验并入 `test_refseg_scripts.py`。
 - 新增 ADR-0029；发布副本定向 `9/9`、全库 CPU `65/65`、1-batch CPU smoke 通过；其他任务与共享模型结构不变。
 - 实现提交 `3c65c9c` 已推送到 GitHub `main`。
+
+### 42. RefSeg 测试文件统一命名
+
+- 三个 Head 测试合并为 `test_refseg_head.py`；文本输入和默认配置测试改为 `test_refseg_*` 命名。
+- 13 条有效断言全部保留，定向 `13/13`、全库 CPU `65/65` 通过；运行时代码不变。

@@ -11,8 +11,8 @@ from dataset.rrsisd_refseg_dataset import _load_text_embeddings
 from tasks.refseg.engine import predict_with_optional_text
 
 
-class UnusedTextInputCleanupTest(unittest.TestCase):
-    def test_legacy_role_masks_are_ignored_when_loading_cache(self):
+class RefSegTextInputTest(unittest.TestCase):
+    def test_removed_role_masks_are_ignored_when_loading_cache(self):
         payload = {
             "ids": ["sample-1"],
             "embeddings": torch.randn(1, 5, 4),
