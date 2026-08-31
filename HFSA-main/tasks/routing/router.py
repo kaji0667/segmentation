@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import threading
 from typing import Any, Protocol
 
 from .config import TaskConfig
@@ -35,6 +36,7 @@ class TaskRouter:
     def __init__(self) -> None:
         self._factories: dict[str, AdapterFactory] = {}
         self._instances: dict[str, TaskAdapter] = {}
+        self._instance_lock = threading.Lock()
 
     def list_tasks(self) -> list[dict[str, Any]]:
         tasks = []
@@ -92,7 +94,9 @@ class TaskRouter:
                 f"{config.title}界面与路由已就绪，模型推理接口将在后续接入。"
             )
         if config.task_id not in self._instances:
-            self._instances[config.task_id] = factory(config)
+            with self._instance_lock:
+                if config.task_id not in self._instances:
+                    self._instances[config.task_id] = factory(config)
         return self._instances[config.task_id].predict(**normalized)
 
     def unload(self, task_id: str) -> None:

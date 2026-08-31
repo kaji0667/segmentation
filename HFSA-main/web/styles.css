@@ -385,6 +385,7 @@ button { color: inherit; }
 .panel-heading h3 { margin: 0; font-size: 15px; }
 .panel-heading small { color: #7a879a; font-size: 10px; }
 .pending-chip { padding: 6px 9px; border-radius: 999px; background: #f2f5f9; }
+.pending-chip.ready { color: #16756c; background: #e9f7f4; }
 
 .upload-zone {
   position: relative;
@@ -483,6 +484,62 @@ button { color: inherit; }
   background-size: 24px 24px;
 }
 
+.refseg-result { width: 100%; padding: 14px; }
+.result-gallery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.result-image {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid #dfe7f1;
+  border-radius: 12px;
+  background: #e8edf4;
+}
+.result-image-main { grid-column: 1 / -1; }
+.result-image img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; }
+.result-image-main img { max-height: 300px; aspect-ratio: auto; }
+.result-image figcaption {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 5px 8px;
+  color: white;
+  border-radius: 7px;
+  background: rgba(13, 29, 55, 0.72);
+  font-size: 9px;
+  backdrop-filter: blur(6px);
+}
+.result-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.result-metrics > div {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #e0e7f0;
+  border-radius: 10px;
+  background: white;
+}
+.result-metrics span { display: block; color: #8793a5; font-size: 8px; }
+.result-metrics strong { display: block; margin-top: 4px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.result-downloads { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.result-downloads a {
+  padding: 7px 10px;
+  color: var(--task-accent);
+  border: 1px solid color-mix(in srgb, var(--task-accent) 22%, #dce4ef);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--task-accent) 5%, white);
+  font-size: 9px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .result-placeholder { padding: 34px; text-align: center; }
 .result-placeholder strong { display: block; margin-top: 20px; font-size: 14px; }
 .result-placeholder p { max-width: 320px; margin: 8px auto 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
@@ -516,5 +573,6 @@ footer { display: flex; justify-content: space-between; padding: 14px 4px 0; col
   .section-heading p { display: none; }
   .workspace { padding: 12px; border-radius: 18px; }
   .panel { padding: 16px; }
+  .result-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   footer { flex-direction: column; gap: 5px; }
 }

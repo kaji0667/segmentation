@@ -16,7 +16,9 @@ const runLabel = document.querySelector("#run-label");
 const formMessage = document.querySelector("#form-message");
 const resultHeading = document.querySelector("#result-heading");
 const resultHelp = document.querySelector("#result-help");
+const resultStage = document.querySelector("#result-stage");
 const outputTags = document.querySelector("#output-tags");
+const interfaceStatusChip = document.querySelector("#interface-status-chip");
 const imageInput = document.querySelector("#image-input");
 const uploadZone = document.querySelector("#upload-zone");
 const uploadEmpty = document.querySelector("#upload-empty");
@@ -41,6 +43,30 @@ function formatBytes(bytes) {
 function setMessage(message = "", kind = "") {
   formMessage.textContent = message;
   formMessage.className = `form-message${kind ? ` ${kind}` : ""}`;
+}
+
+function renderPlaceholder(message, detail) {
+  resultStage.innerHTML = `
+    <div class="result-placeholder">
+      <div class="scan-frame" aria-hidden="true">
+        <span class="corner top-left"></span>
+        <span class="corner top-right"></span>
+        <span class="corner bottom-left"></span>
+        <span class="corner bottom-right"></span>
+        <span class="scan-line"></span>
+      </div>
+      <strong></strong>
+      <p></p>
+    </div>
+  `;
+  resultStage.querySelector("strong").textContent = message;
+  resultStage.querySelector("p").textContent = detail;
+}
+
+function setInterfaceStatus(task) {
+  const available = ["ready", "loaded"].includes(task.interface_status);
+  interfaceStatusChip.textContent = available ? "模型可用" : "接口待接入";
+  interfaceStatusChip.classList.toggle("ready", available);
 }
 
 function renderTasks() {
@@ -101,6 +127,8 @@ function selectTask(taskId) {
   runLabel.textContent = task.action_label;
   runButton.disabled = false;
   setMessage("");
+  setInterfaceStatus(task);
+  renderPlaceholder("结果将在这里呈现", task.detail);
   renderDynamicFields(task);
   outputTags.innerHTML = task.outputs.map((output) => `<span class="output-tag">${output.label}</span>`).join("");
   workspace.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -110,6 +138,10 @@ function setImageFile(file) {
   if (!file) return;
   if (!file.type.startsWith("image/") && !/\.(tif|tiff)$/i.test(file.name)) {
     setMessage("请选择 JPG、PNG、WEBP 或 TIFF 图像。", "error");
+    return;
+  }
+  if (file.size > 40 * 1024 * 1024) {
+    setMessage("图像文件过大，请上传不超过 40 MiB 的图像。", "error");
     return;
   }
   if (state.imageUrl) URL.revokeObjectURL(state.imageUrl);
@@ -146,6 +178,104 @@ replaceImage.addEventListener("click", (event) => {
 
 uploadZone.addEventListener("drop", (event) => setImageFile(event.dataTransfer.files[0]));
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("FileReader failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatPercent(value) {
+  return `${(Number(value || 0) * 100).toFixed(2)}%`;
+}
+
+function formatLatency(value) {
+  const latency = Number(value);
+  return Number.isFinite(latency) ? `${latency.toFixed(1)} ms` : "—";
+}
+
+function resultFilename(suffix) {
+  const stem = (state.imageFile?.name || "refseg-result").replace(/\.[^.]+$/, "");
+  return `${stem}_${suffix}.png`;
+}
+
+function createResultImage(label, source, className = "") {
+  const figure = document.createElement("figure");
+  figure.className = `result-image ${className}`.trim();
+  const image = document.createElement("img");
+  image.src = source;
+  image.alt = label;
+  const caption = document.createElement("figcaption");
+  caption.textContent = label;
+  figure.append(image, caption);
+  return figure;
+}
+
+function renderRefsegResult(result) {
+  const images = result?.images || {};
+  const summary = result?.summary || {};
+  if (!images.overlay || !images.mask || !images.probability) {
+    throw new Error("语义分割结果缺少可视化图像。");
+  }
+
+  resultStage.innerHTML = "";
+  const content = document.createElement("div");
+  content.className = "refseg-result";
+
+  const gallery = document.createElement("div");
+  gallery.className = "result-gallery";
+  gallery.append(
+    createResultImage("目标叠加效果", images.overlay, "result-image-main"),
+    createResultImage("二值 Mask", images.mask),
+    createResultImage("像素概率图", images.probability),
+  );
+
+  const metrics = [
+    ["分割阈值", Number(summary.threshold).toFixed(2)],
+    ["前景占比", formatPercent(summary.foreground_ratio)],
+    ["模型耗时", formatLatency(summary.latency_ms)],
+    ["原图尺寸", Array.isArray(summary.original_size) ? `${summary.original_size[1]} × ${summary.original_size[0]}` : "—"],
+  ];
+  const metricGrid = document.createElement("div");
+  metricGrid.className = "result-metrics";
+  metrics.forEach(([label, value]) => {
+    const item = document.createElement("div");
+    const name = document.createElement("span");
+    const amount = document.createElement("strong");
+    name.textContent = label;
+    amount.textContent = value;
+    item.append(name, amount);
+    metricGrid.appendChild(item);
+  });
+
+  const downloads = document.createElement("div");
+  downloads.className = "result-downloads";
+  [
+    ["下载叠加图", "overlay"],
+    ["下载 Mask", "mask"],
+    ["下载概率图", "probability"],
+  ].forEach(([label, key]) => {
+    const link = document.createElement("a");
+    link.href = images[key];
+    link.download = resultFilename(key);
+    link.textContent = label;
+    downloads.appendChild(link);
+  });
+
+  content.append(gallery, metricGrid, downloads);
+  resultStage.appendChild(content);
+}
+
+function renderResult(taskId, result) {
+  if (taskId === "refseg") {
+    renderRefsegResult(result);
+    return;
+  }
+  renderPlaceholder("任务执行完成", "该任务结果渲染器将在对应模型接口接入时补充。");
+}
+
 runButton.addEventListener("click", async () => {
   if (!state.selectedTask) {
     setMessage("请先选择一项分析任务。", "error");
@@ -156,7 +286,7 @@ runButton.addEventListener("click", async () => {
     return;
   }
 
-  const inputs = { image: state.imageFile.name };
+  const inputs = {};
   for (const field of state.selectedTask.inputs.filter((item) => item.kind !== "image")) {
     const value = document.querySelector(`[data-field-key="${field.key}"]`)?.value.trim() || "";
     if (field.required && !value) {
@@ -167,8 +297,13 @@ runButton.addEventListener("click", async () => {
   }
 
   runButton.disabled = true;
-  setMessage("正在检查任务路由…");
+  setMessage("正在读取图像并准备推理…");
+  renderPlaceholder("正在分析图像", "模型首次使用时需要加载 checkpoint 和文本编码器，请稍候。");
   try {
+    inputs.image = {
+      name: state.imageFile.name,
+      data_url: await fileToDataUrl(state.imageFile),
+    };
     const response = await fetch("/api/predict", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -177,14 +312,24 @@ runButton.addEventListener("click", async () => {
     const payload = await response.json();
     if (response.ok) {
       setMessage("任务执行完成。", "success");
+      renderResult(state.selectedTask.task_id, payload.result);
+      interfaceStatusChip.textContent = "模型已加载";
+      interfaceStatusChip.classList.add("ready");
     } else if (payload.status === "interface_pending") {
-      setMessage(payload.message, "success");
+      setMessage(payload.message, "error");
       resultHelp.textContent = `${state.selectedTask.title}的界面、输入校验和路由已经连通；下一步接入实际模型 Adapter。`;
+      renderPlaceholder("该任务暂未接入模型", resultHelp.textContent);
     } else {
-      setMessage(payload.error || "任务请求失败。", "error");
+      const message = payload.message || payload.error || "任务请求失败。";
+      setMessage(message, "error");
+      renderPlaceholder("分析未完成", message);
     }
   } catch (error) {
-    setMessage("无法连接本地界面服务，请确认 web_app.py 正在运行。", "error");
+    const message = error instanceof Error && error.message.includes("结果缺少")
+      ? error.message
+      : "无法完成请求，请确认本地服务正在运行且图像可以读取。";
+    setMessage(message, "error");
+    renderPlaceholder("分析未完成", message);
   } finally {
     runButton.disabled = false;
   }

@@ -2,7 +2,7 @@
 
 最后更新：2026-08-31
 
-## 2026-08-31 最新状态：本地 Web 界面与路由骨架
+## 2026-08-31 最新状态：Web 语义分割真实模型接入
 
 - 新增 `HFSA-main/web_app.py` 和 `HFSA-main/web/`，使用 Python 标准库与原生 HTML/CSS/JavaScript 提供无需新增依赖的本地浏览器界面。
 - 页面包含三个任务卡片、图像拖放/预览、任务动态文本输入、结果占位区和响应式布局；默认访问地址为 `http://127.0.0.1:7860`。
@@ -10,10 +10,14 @@
 - 用户展示名称按赛题统一为“场景分类”和“语义分割”；内部 `classification`、`refseg` 标识与模型边界不变。任务说明允许两行显示，不再被单行省略号截断。
 - 用户界面品牌已改为项目正式名称“遥感图-文可解释轻量化多任务智能解译系统”；浏览器标题与 Hero 展示全称，左上角使用紧凑简称，页面不再向用户展示 HFSA。
 - 新增 `tasks/routing/`，三任务配置可序列化为 JSON，并严格保留分类仅图像、计数图像+目标类别、指代分割图像+描述的不同契约。
-- `TaskRouter` 已支持输入校验、延迟 Adapter 注册、实例缓存和释放。当前三个真实模型 Adapter 均未接入，`/api/predict` 返回明确的 `interface_pending`，不伪装成真实推理结果。
-- 页面启动不会导入或加载 PyTorch、OpenCLIP 或任务模型；公网 IP、域名、HTTPS、鉴权和反向代理留到部署阶段处理。
+- 新增 `tasks/routing/adapters/refseg.py::RefSegAdapter`：浏览器 data URL 解码后调用现有 `RefSegPredictor`，返回叠加图、二值 Mask、概率图和 JSON 摘要；支持 `HFSA_REFSEG_CHECKPOINT`、`HFSA_REFSEG_DEVICE` 覆盖。
+- 默认路由只注册 RefSeg。页面启动和任务列表请求不会导入 `tasks.refseg.inference` 或加载 PyTorch/OpenCLIP；第一次真实分割请求才加载 checkpoint，实例随后缓存并在服务关闭时释放。
+- RefSeg 结果区展示阈值、前景占比、模型耗时、原图尺寸，并提供三张 PNG 下载。分类和计数继续返回 `interface_pending`，不伪装成真实推理结果。
+- HTTP JSON 上限为 64 MiB，浏览器与 Adapter 限制单张原始图像不超过 40 MiB；推理异常统一返回 `inference_error`。
+- 公网 IP、域名、HTTPS、鉴权和反向代理仍留到部署阶段处理。
 - 本阶段不修改任何 Backbone、Neck、OpenCLIP、任务 Head、Loss、训练流程或 checkpoint 格式。
-- Web/路由定向测试通过 `6/6`，发布仓库全量 CPU 回归通过 `62/62`，活动副本通过 `63/63`；Edge/Playwright 完成 1440px 桌面与 390px 移动端视觉检查，无 JavaScript 页面错误。
+- RefSeg Web Adapter 定向测试 `3/3`、Web 路由定向测试 `8/8`、活动副本与发布仓库全库回归均为 `67/67`，`node --check web/app.js` 通过。
+- 真实 HTTP smoke 使用 `03600.jpg` 和 `The gray small windmill`：严格加载 epoch-44 `best_raw.pt`，阈值 `0.70`，返回 `800×800` 结果、前景像素 `1976`、前景占比 `0.0030875`，与直接 Predictor smoke 一致。
 
 ## 2026-08-30 最新状态：指代分割单图推理边界
 
@@ -102,7 +106,8 @@
 
 1. 获取计数队友的 VRSBench 数据路径和训练 checkpoint，运行最小训练 smoke 与 1-2 张图的独立计数评测，确认 checkpoint 严格加载和真实 EM/MAE/RMSE 输出。
 2. 使用真实场景分类数据运行完整训练与独立 test；GPU 空闲时先执行最小 CUDA smoke，并记录参数、显存、耗时和 checkpoint 大小。
-3. 所有任务稳定后，再设计统一推理入口和 A5000 同条件资源测评；当前不要提前合并为联合多数据集训练。
+3. 场景分类正式 checkpoint 和单图 Predictor 验证完成后，按 RefSeg 相同边界接入独立 Classification Adapter；计数 checkpoint 可用后再接入 Counting Adapter。
+4. 三个任务稳定后处理公网 IP、域名、HTTPS、鉴权和反向代理，并进行 A5000 同条件资源测评；当前不要提前合并为联合多数据集训练。
 
 ## 部署注意
 

@@ -1104,3 +1104,12 @@ Follow-up interface review:
 - Aligned user-facing task names with the competition wording: `场景分类` and `语义分割`; internal task IDs and the RefSeg implementation remain unchanged.
 - Allowed compact task descriptions to wrap to two lines and increased item height only from 88px to 98px, removing the premature ellipsis without returning to oversized cards.
 - Replaced the user-facing HFSA brand with the official project name `遥感图-文可解释轻量化多任务智能解译系统`; the browser title and Hero carry the full name, while the compact header uses `遥感图-文智能解译` plus the three project attributes.
+
+## 2026-08-31 Web RefSeg 真实模型接入
+
+- 新增 `tasks/routing/adapters/refseg.py`，将浏览器 data URL 解码为 PIL 图像，并在第一次请求时延迟创建 `RefSegPredictor`；默认 checkpoint 为 `runs/semseg/srp_yolov12m_axis/weights/best_raw.pt`，支持 `HFSA_REFSEG_CHECKPOINT` 和 `HFSA_REFSEG_DEVICE`。
+- `web_app.py` 默认只注册 RefSeg Adapter，JSON 请求上限提高到 64 MiB，模型异常返回 HTTP 500 `inference_error`；分类和计数仍保持 HTTP 503 `interface_pending`。
+- 前端提交真实图像内容，展示叠加图、二值 Mask、概率图、阈值、前景占比、耗时和原图尺寸，并提供三张 PNG 下载；原始图像上限为 40 MiB。
+- 延迟加载审计确认 `create_default_router()` 后 `tasks.refseg.inference` 不在 `sys.modules`；RefSeg Adapter 定向 `3/3`、Web 路由 `8/8`、活动副本与发布仓库全库均为 `67/67`，`node --check web/app.js` 通过。
+- 真实 HTTP smoke：`03600.jpg` + `The gray small windmill`，epoch 44、阈值 `0.70`、输入尺寸 `512`、原图/输出 `800×800`、前景像素 `1976`、前景占比 `0.0030875`；`/api/predict` 返回 HTTP 200 和三张 PNG data URL，与此前直接 Predictor smoke 一致。
+- 本次没有修改 Backbone、Neck、OpenCLIP、`TextPromptSegment`、Loss、训练流程或 checkpoint 格式；没有恢复 `train_semseg.py`。

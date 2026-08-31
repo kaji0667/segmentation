@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import threading
+import traceback
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -28,6 +29,21 @@ ASSETS = {
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
 }
+MAX_REQUEST_BYTES = 64 * 1024 * 1024
+
+
+def create_default_router() -> TaskRouter:
+    """Register only task adapters that have a complete runtime boundary."""
+
+    router = TaskRouter()
+
+    def refseg_factory(config):
+        from tasks.routing.adapters.refseg import RefSegAdapter
+
+        return RefSegAdapter(config)
+
+    router.register_adapter("refseg", refseg_factory)
+    return router
 
 
 class HFSAWebServer(ThreadingHTTPServer):
@@ -64,8 +80,8 @@ class HFSARequestHandler(BaseHTTPRequestHandler):
 
     def _read_json(self) -> dict[str, Any]:
         content_length = int(self.headers.get("Content-Length", "0"))
-        if content_length <= 0 or content_length > 1024 * 1024:
-            raise ValueError("Request body must be a non-empty JSON document under 1 MiB.")
+        if content_length <= 0 or content_length > MAX_REQUEST_BYTES:
+            raise ValueError("Request body must be a non-empty JSON document under 64 MiB.")
         payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
         if not isinstance(payload, dict):
             raise ValueError("Request JSON must be an object.")
@@ -117,6 +133,17 @@ class HFSARequestHandler(BaseHTTPRequestHandler):
                 {"success": False, "status": "interface_pending", "message": str(exc)},
             )
             return
+        except Exception as exc:  # noqa: BLE001 - HTTP boundary must return structured failures.
+            traceback.print_exc()
+            self._send_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {
+                    "success": False,
+                    "status": "inference_error",
+                    "message": f"模型推理失败：{exc}",
+                },
+            )
+            return
         self._send_json(HTTPStatus.OK, {"success": True, "task_id": task_id, "result": result})
 
 
@@ -125,7 +152,8 @@ def create_server(host: str = "127.0.0.1", port: int = 7860, router: TaskRouter 
         raise ValueError("port must be between 0 and 65535")
     if not WEB_ROOT.is_dir():
         raise FileNotFoundError(f"HFSA web asset directory not found: {WEB_ROOT}")
-    return HFSAWebServer((str(host), int(port)), router or TaskRouter(), WEB_ROOT)
+    active_router = router if router is not None else create_default_router()
+    return HFSAWebServer((str(host), int(port)), active_router, WEB_ROOT)
 
 
 def build_parser() -> argparse.ArgumentParser:

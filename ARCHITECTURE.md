@@ -194,8 +194,11 @@ The inference router uses explicit manual task selection. After selection, each 
 - `config.py` owns JSON-serializable task/input/output definitions.
 - `registry.py` owns display order, project-relative checkpoint defaults, user-facing labels and the three distinct contracts.
 - `router.py` owns task lookup, schema validation, lazy Adapter factory registration, instance reuse and release.
+- `adapters/refseg.py` owns browser image decoding, lazy `RefSegPredictor` construction, serialized prediction execution, PNG data-URL encoding and model resource release.
 
-At the current stage no Adapter is registered by default. `/api/predict` validates the selected task and inputs, then returns `interface_pending`. RefSeg, counting and classification must later receive separate thin Adapters around their existing task-owned inference classes. Public hosting, authentication, HTTPS and reverse proxy configuration remain outside this local interface module.
+The default Web router registers only RefSeg. Registration itself imports no model code; the adapter and `RefSegPredictor` are constructed on the first prediction request, then cached for later requests. RefSeg accepts a browser image payload plus text and returns task-owned summary metadata together with overlay, mask and probability PNG data URLs. Counting and classification remain unregistered and return `interface_pending`; they must later receive separate thin Adapters around their own predictors and keep their own output schemas.
+
+`web_app.py` limits request JSON to 64 MiB, converts uncaught inference failures into structured `inference_error` responses and closes cached adapters with the server. The native front end limits raw image files to 40 MiB, renders RefSeg-specific results and exposes direct PNG downloads. Public hosting, authentication, HTTPS and reverse proxy configuration remain outside this local interface module.
 
 ## Text-Guided Object Counting Task
 

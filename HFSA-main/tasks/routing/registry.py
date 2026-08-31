@@ -10,7 +10,7 @@ IMAGE_INPUT = InputFieldConfig(
     label="上传遥感图像",
     kind="image",
     placeholder="拖放图片或点击选择文件",
-    help_text="支持 JPG、PNG、WEBP 和 TIFF；实际模型接口接入后再执行推理。",
+    help_text="支持 JPG、PNG、WEBP 和 TIFF；输入尺寸由所选任务模型自动处理。",
     accept="image/jpeg,image/png,image/webp,image/tiff",
 )
 
