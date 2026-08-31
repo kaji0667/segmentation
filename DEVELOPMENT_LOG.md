@@ -1123,3 +1123,11 @@ Follow-up interface review:
 - 真实 HTTP smoke：截图中的飞机图输入“最上方的飞机”，自动转为 `the topmost airplane`，阈值 `0.70`，输出 1357 个前景像素，`found_target=true`。
 - RefSeg Adapter 定向测试 `6/6`、Web 路由 `8/8`、活动副本全库 `71/71`、发布仓库全库 `70/70` 和 JavaScript 语法检查通过；活动副本保留一项额外本地回归测试。
 - 本次只修改 Web 推理预处理与展示，不修改 OpenCLIP、RefSeg checkpoint、模型 forward 或训练协议。
+
+## 2026-08-31 RefSeg 严格单 checkpoint
+
+- 删除 RefSeg `--resume`、optimizer/scheduler/RNG 恢复状态、`last.pt`/`best.pt` 保存和旧文件名自动回退。
+- `weights/best_raw.pt` 改为紧凑 `hfsa_refseg_deployment_v1` payload，并成为训练唯一 checkpoint。
+- 删除两个历史 checkpoint 测试文件，严格单-checkpoint与纯推理 payload校验并入 `test_refseg_scripts.py`。
+- 不修改其他任务 checkpoint、共享 Backbone/Neck、OpenCLIP、Head、Loss 或数据协议。
+- 活动副本已完成 Windows 编译、RefSeg 定向 `9/9`、WSL 全库 CPU `67/67` 和 1-batch CPU smoke；发布副本完成定向 `9/9`、全库 CPU `65/65` 和独立 1-batch CPU smoke。两次 smoke 均只生成 `weights/best_raw.pt`，payload keys 为 `args/data/epoch/format/metrics/model`。

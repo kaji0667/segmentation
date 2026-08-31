@@ -61,6 +61,8 @@ python web_app.py --open-browser
 runs/semseg/srp_yolov12m_axis/weights/best_raw.pt
 ```
 
+RefSeg 训练和交付只使用该 `best_raw.pt`，不再生成恢复 checkpoint，也不自动回退旧 `best.pt`。
+
 可通过环境变量覆盖：
 
 ```bash

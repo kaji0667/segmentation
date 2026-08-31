@@ -310,3 +310,10 @@
 - “最上方的飞机”真实 HTTP 请求转为 `the topmost airplane`，返回 1357 个前景像素；没有修改模型、OpenCLIP 或 checkpoint。
 - 新增 ADR-0028，记录有限离线转译而非更换多语言编码器或接入在线翻译的原因。
 - Adapter 定向 `6/6`、Web 路由 `8/8`、活动副本全库 `71/71`、发布仓库全库 `70/70` 通过。
+
+### 41. RefSeg 严格单 checkpoint
+
+- 取消 RefSeg 旧 `best.pt` 文件名兼容与完整训练恢复 checkpoint。
+- 训练和训练后 test 只使用 `weights/best_raw.pt`，其中不包含 optimizer、scheduler、RNG 或恢复状态。
+- 删除 `test_semseg_checkpoint_recovery.py` 和 `test_semseg_checkpoint_selection.py`，必要校验并入 `test_refseg_scripts.py`。
+- 新增 ADR-0029；发布副本定向 `9/9`、全库 CPU `65/65`、1-batch CPU smoke 通过；其他任务与共享模型结构不变。

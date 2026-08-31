@@ -11,6 +11,7 @@ import torch
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from tasks.refseg.checkpoint import save_deployment_checkpoint
 from tasks.refseg.engine import parse_args, resolve_checkpoint_path, validate
 
 
@@ -38,6 +39,42 @@ class RefSegScriptsTest(unittest.TestCase):
     def test_test_preview_batch_argument_defaults_to_five(self):
         self.assertEqual(parse_args([]).test_preview_batches, 5)
         self.assertEqual(parse_args(["--test-preview-batches", "2"]).test_preview_batches, 2)
+
+    def test_one_checkpoint_delivery_is_the_only_policy(self):
+        args = parse_args([])
+        self.assertFalse(hasattr(args, "resume"))
+        self.assertFalse(hasattr(args, "save_resume_state"))
+        engine_text = (PROJECT_ROOT / "tasks" / "refseg" / "engine.py").read_text(encoding="utf-8")
+        checkpoint_text = (PROJECT_ROOT / "tasks" / "refseg" / "checkpoint.py").read_text(encoding="utf-8")
+        self.assertIn('weights_dir / "best_raw.pt"', engine_text)
+        self.assertNotIn('weights_dir / "best.pt"', engine_text)
+        self.assertNotIn('training_state', engine_text)
+        self.assertNotIn('last.pt', engine_text)
+        self.assertNotIn('best.pt', checkpoint_text)
+
+    def test_deployment_checkpoint_contains_only_inference_state(self):
+        model = torch.nn.Linear(2, 1)
+        args = type("Args", (), {"model": "example.yaml", "imgsz": 512})()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            weights_dir = Path(temp_dir) / "weights"
+            path = weights_dir / "best_raw.pt"
+            save_deployment_checkpoint(
+                path,
+                model,
+                epoch=4,
+                args=args,
+                data={"nc": 1},
+                metrics={"best_threshold": 0.7},
+                retry_delay=0,
+            )
+
+            self.assertEqual([item.name for item in weights_dir.iterdir()], ["best_raw.pt"])
+            checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+            self.assertNotIn("optimizer", checkpoint)
+            self.assertNotIn("scheduler", checkpoint)
+            self.assertNotIn("training_state", checkpoint)
+            self.assertNotIn("rng_state", checkpoint)
 
     def test_scripts_use_project_relative_paths(self):
         for filename in ("train_refseg.sh", "test_refseg.sh"):

@@ -19,7 +19,7 @@ The project baseline and core YOLO/OpenCLIP code were mostly completed by the se
 - Data layer: parses RRSIS-D referring segmentation metadata, reads images, decodes binary masks, loads cached text embeddings, and applies train-only lightweight augmentation.
 - Text embedding layer: uses cached OpenCLIP text vectors, currently expected to match `text_dim=768`.
 - Model layer: uses YOLOv12 backbone/neck with a text-guided segmentation head through `TextPromptSegment`.
-- Task layer: `tasks/refseg/engine.py` builds datasets, samplers, model, loss, metrics, plots, and run artifacts; `tasks/refseg/checkpoint.py` owns restartable checkpoint policy.
+- Task layer: `tasks/refseg/engine.py` builds datasets, samplers, model, loss, metrics, plots, and run artifacts; `tasks/refseg/checkpoint.py` owns atomic persistence of the sole deployable checkpoint.
 - Single-image inference layer: `tasks/refseg/inference.py` strictly loads a full RefSeg checkpoint, encodes the supplied expression into OpenCLIP token features, restores the predicted probability/mask to the original image size, and emits mask/probability/overlay artifacts.
 - Experiment artifacts: `HFSA-main/runs/` stores training results and should not be treated as source code.
 
@@ -91,7 +91,7 @@ The current no-attention candidate has one output path: learnable token pooling,
 
 ## Checkpoint Selection and Retention
 
-The standard semantic-segmentation baseline selects both the validation threshold and checkpoint score by official sample mIoU. `best.pt` retains the historical `min_delta` rule used by early stopping, while `best_raw.pt` records every strict raw maximum without applying `min_delta`. Test evaluation reuses the selected checkpoint's validation threshold; the independent test script defaults to `best_raw.pt`, while legacy runs may explicitly use `best.pt`. See ADR-0007.
+The semantic-segmentation baseline selects both the validation threshold and checkpoint score by official sample mIoU. The sole checkpoint artifact is `weights/best_raw.pt`, saved on every strict raw maximum without applying `min_delta`. Its `hfsa_refseg_deployment_v1` payload excludes optimizer, scheduler, RNG and restart state. RefSeg no longer exposes resume-state saving or legacy `best.pt` fallback; interrupted training restarts from the beginning. Test evaluation reuses the checkpoint's frozen validation threshold. See ADR-0007 and ADR-0029.
 
 ## Learnable Text Token Pooling Candidate
 
@@ -248,7 +248,7 @@ scripts/train_<task>.sh or scripts/test_<task>.sh
 -> task-specific Head/Loss in the shared Ultralytics fork
 ```
 
-`tasks/refseg/checkpoint.py` is intentionally unique because the custom referring-segmentation loop owns optimizer, scheduler, early-stopping, validation-threshold, RNG, and CSV recovery. Classification stores a Head-only checkpoint in its trainer. Counting uses the existing Ultralytics detection checkpoint contract. File-name symmetry is not required when the task framework owns different responsibilities.
+`tasks/refseg/checkpoint.py` is intentionally minimal and persists only the inference/test `best_raw.pt`; early stopping remains in the training loop but restart state is not serialized. Classification stores a Head-only checkpoint in its trainer. Counting uses the existing Ultralytics detection checkpoint contract. File-name symmetry is not required when the task framework owns different responsibilities.
 - `SceneClassificationLoss` 位于统一 `ultralytics/utils/loss.py`，封装原单标签 CrossEntropy；Trainer 和 Evaluator 均调用该任务 Loss 类，不依赖上游训练脚本。
 - 推理预处理可通过 `SceneDataModule.build_transform()` 独立构建，因此单图 Top-K 不依赖数据集目录；`split=all` 在显式 train/val/test 布局下合并各 split 并校验类别顺序。训练保持原 Head 的 BatchNorm 结构，并避免产生末尾单样本 batch。
 - 分类、计数和指代分割保持独立 Trainer、Loss、数据与评测协议；本次未修改 OpenCLIP、`TextPromptSegment` 或现有分割/计数训练链路。

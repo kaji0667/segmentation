@@ -16,12 +16,7 @@ from ultralytics.utils import yaml_load, yaml_save
 
 from .checkpoint import (
     checkpoint_improvement_flags,
-    recover_training_state,
-    restore_rng_state,
-    save_checkpoint,
-    select_test_checkpoint,
-    trim_uncommitted_results,
-    validate_resume_args,
+    save_deployment_checkpoint,
 )
 
 
@@ -92,7 +87,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--test-after-train", action="store_true", help="Evaluate the best checkpoint on the test split using the validation-selected threshold.")
     parser.add_argument("--eval-only", action="store_true", help="Evaluate an existing full checkpoint without building the train/val datasets.")
     parser.add_argument("--checkpoint", type=str, default="", help="Full semantic-segmentation checkpoint used by --eval-only.")
-    parser.add_argument("--resume", type=str, default="", help="Resume training from a full last.pt checkpoint, including optimizer state.")
     parser.add_argument("--max-test-batches", type=int, default=0, help="Stop test evaluation after this many batches; 0 means full test split.")
     parser.add_argument("--test-preview-batches", type=int, default=5, help="Save previews for the first N test batches; 0 disables test previews.")
     parser.add_argument("--print-interval", type=int, default=10, help="Print train progress every N batches.")
@@ -1038,8 +1032,6 @@ def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
     if int(args.test_preview_batches) < 0:
         raise ValueError("--test-preview-batches must be >= 0")
-    if args.eval_only and args.resume:
-        raise ValueError("--eval-only and --resume are mutually exclusive.")
     if args.eval_only:
         if not args.checkpoint:
             raise ValueError("--eval-only requires --checkpoint.")
@@ -1171,19 +1163,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     writer = build_summary_writer(save_dir, args.no_tensorboard or args.nosave)
     model = SemanticSegmentationModel(args.model, ch=3, nc=nc, verbose=False).to(device)
-    resume_checkpoint: Optional[Dict[str, Any]] = None
-    start_epoch = 0
-    if args.resume:
-        resume_path = resolve_checkpoint_path(args.resume)
-        if not resume_path.exists():
-            raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
-        resume_checkpoint = torch.load(resume_path, map_location=device, weights_only=False)
-        validate_resume_args(args, resume_checkpoint.get("args", {}))
-        model.load_state_dict(resume_checkpoint["model"], strict=True)
-        start_epoch = int(resume_checkpoint["epoch"])
-        if start_epoch < 0 or start_epoch >= int(args.epochs):
-            raise ValueError(f"Resume checkpoint epoch {start_epoch} is outside training range 0..{args.epochs - 1}.")
-    elif not args.eval_only:
+    if not args.eval_only:
         load_pretrained_backbone(model, args.weights, device)
     model.loss_pos_weight_max = float(args.pos_weight_max)
     model.loss_small_target_weight = float(args.loss_small_target_weight)
@@ -1202,30 +1182,13 @@ def main(argv: Optional[List[str]] = None) -> None:
         if args.eval_only
         else torch.optim.AdamW((p for p in model.parameters() if p.requires_grad), lr=args.lr, weight_decay=args.weight_decay)
     )
-    if resume_checkpoint is not None:
-        if optimizer is None or "optimizer" not in resume_checkpoint:
-            raise ValueError("Resume checkpoint does not contain optimizer state.")
-        optimizer.load_state_dict(resume_checkpoint["optimizer"])
     scheduler = None
     if args.scheduler == "cosine" and optimizer is not None:
-        saved_scheduler = resume_checkpoint.get("scheduler") if resume_checkpoint is not None else None
-        if resume_checkpoint is not None and saved_scheduler is None:
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer,
-                T_max=max(int(args.epochs), 1),
-                eta_min=float(args.min_lr),
-                last_epoch=start_epoch - 1,
-            )
-        else:
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer,
-                T_max=max(int(args.epochs), 1),
-                eta_min=float(args.min_lr),
-            )
-            if saved_scheduler is not None:
-                scheduler.load_state_dict(saved_scheduler)
-                for param_group, lr in zip(optimizer.param_groups, scheduler.get_last_lr()):
-                    param_group["lr"] = lr
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=max(int(args.epochs), 1),
+            eta_min=float(args.min_lr),
+        )
     prompt_embeddings = build_prompt_embeddings(args, data, names, device)
 
     print(f"data: {args.data}")
@@ -1238,8 +1201,6 @@ def main(argv: Optional[List[str]] = None) -> None:
     print(f"weights: {'<not loaded in eval-only mode>' if args.eval_only else (args.weights or '<none>')}")
     if args.eval_only:
         print(f"checkpoint: {args.checkpoint}")
-    elif args.resume:
-        print(f"resume checkpoint: {args.resume} (completed epoch {start_epoch})")
     print(f"text queries: {args.text_queries}")
     print(f"text encoder: {args.text_encoder}")
     print(f"device: {device}")
@@ -1273,34 +1234,12 @@ def main(argv: Optional[List[str]] = None) -> None:
     if not args.nosave:
         print(f"save dir: {save_dir}")
 
-    if resume_checkpoint is not None:
-        backup_path = trim_uncommitted_results(results_csv, start_epoch)
-        if backup_path is not None:
-            print(f"backed up uncommitted result rows to: {backup_path}")
-        recovered_state = resume_checkpoint.get("training_state") or recover_training_state(
-            results_csv,
-            start_epoch,
-            float(args.min_delta),
-        )
-        best_fitness = float(recovered_state["best_fitness"])
-        best_raw_fitness = float(recovered_state["best_raw_fitness"])
-        epochs_without_improvement = int(recovered_state["epochs_without_improvement"])
-        if restore_rng_state(resume_checkpoint, data_generator):
-            print("restored checkpoint RNG and dataloader-generator state")
-        else:
-            print("warning: legacy checkpoint has no RNG state; resumed sampling is deterministic from seed 42 but not bitwise-continuous")
-        print(
-            "resume state: "
-            f"best={best_fitness:.6f}, raw_best={best_raw_fitness:.6f}, "
-            f"epochs_without_improvement={epochs_without_improvement}"
-        )
-    else:
-        best_fitness = -float("inf")
-        best_raw_fitness = -float("inf")
-        epochs_without_improvement = 0
+    best_fitness = -float("inf")
+    best_raw_fitness = -float("inf")
+    epochs_without_improvement = 0
     last_confusion = None
 
-    for epoch in range(start_epoch, args.epochs):
+    for epoch in range(args.epochs):
         epoch_start = time.time()
         running = 0.0
         seen = 0
@@ -1479,30 +1418,17 @@ def main(argv: Optional[List[str]] = None) -> None:
                 "target_pos_rate": float(val_metrics["target_pos_rate"]) if val_metrics else float("nan"),
                 "class_macro_miou": float(val_metrics["class_macro_miou"]) if val_metrics else float("nan"),
             }
-            training_state = {
-                "best_fitness": float(next_best_fitness),
-                "best_raw_fitness": float(next_best_raw_fitness),
-                "epochs_without_improvement": int(next_epochs_without_improvement),
-            }
-            last_path = weights_dir / "last.pt"
-            save_checkpoint(
-                last_path, model, optimizer, epoch + 1, args, data, checkpoint_metrics,
-                scheduler=scheduler, training_state=training_state, data_generator=data_generator,
-            )
             if raw_improved:
-                save_checkpoint(
-                    weights_dir / "best_raw.pt", model, optimizer, epoch + 1, args, data, checkpoint_metrics,
-                    scheduler=scheduler, training_state=training_state, data_generator=data_generator,
+                save_deployment_checkpoint(
+                    weights_dir / "best_raw.pt",
+                    model,
+                    epoch + 1,
+                    args,
+                    data,
+                    checkpoint_metrics,
                 )
                 print(f"saved raw-best checkpoint: {weights_dir / 'best_raw.pt'}")
-            if improved:
-                save_checkpoint(
-                    weights_dir / "best.pt", model, optimizer, epoch + 1, args, data, checkpoint_metrics,
-                    scheduler=scheduler, training_state=training_state, data_generator=data_generator,
-                )
-                print(f"saved best checkpoint: {weights_dir / 'best.pt'}")
             append_results(results_csv, metrics)
-            print(f"saved last checkpoint: {last_path}")
 
             if not args.no_plots:
                 plot_results(results_csv, save_dir / "results.png")
@@ -1522,7 +1448,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     if test_loader is not None:
         test_checkpoint_path = (
-            resolve_checkpoint_path(args.checkpoint) if args.eval_only else select_test_checkpoint(weights_dir)
+            resolve_checkpoint_path(args.checkpoint) if args.eval_only else weights_dir / "best_raw.pt"
         )
         if not test_checkpoint_path.exists():
             raise FileNotFoundError(f"Cannot run test evaluation without best checkpoint: {test_checkpoint_path}")
@@ -1572,11 +1498,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             "threshold_source": (
                 "explicit checkpoint validation threshold"
                 if args.eval_only
-                else (
-                    "raw-best validation checkpoint"
-                    if test_checkpoint_path.name == "best_raw.pt"
-                    else "legacy best validation checkpoint"
-                )
+                else "raw-best validation checkpoint"
             ),
             "threshold": test_threshold,
             "evaluated_samples": int(test_metrics["evaluated_samples"]),

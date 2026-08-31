@@ -372,6 +372,7 @@ Proposed / Accepted / Superseded
 
 - 团队多任务整合以统一 YOLOv12m Backbone/Neck 和任务专用 Head 为边界；不得为了统一入口把检测、分割、计数、分类等任务强行改成同一种 Dataset、Loss、训练循环或评测协议。
 - 每个任务可以保留独立 Trainer/训练文件，并必须提供自包含的 `scripts/train_<task>.sh` 与 `scripts/test_<task>.sh`。任务脚本应从自身位置定位项目根目录、使用项目相对路径、显式传入数据/模型/权重/输出配置，并直接调用对应任务入口。
+- RefSeg 训练只允许生成 `weights/best_raw.pt`。不提供 `--resume`、恢复状态 checkpoint 或旧 `best.pt` 自动回退；训练中断后从头开始，训练后自动 test 固定读取本次运行的 `weights/best_raw.pt`。
 - 部署包不会携带的辅助 preset 或本机脚本不得成为任务脚本的运行时依赖。当前 `train_refseg.sh` 不得重新依赖 `run_semseg_preset.sh`。
 - 如果最终需要统一 `train.py`，它只能作为薄任务分发器：解析任务编号或名称并调用对应 Trainer，不得在分发器中复制或混合各任务的数据、Loss、训练循环和指标实现。
 - 最终用户输入编号或任务名称后的自动切换属于统一推理入口，与训练脚本分离设计；训练阶段仍按任务、数据集和 checkpoint 独立运行。
@@ -480,6 +481,11 @@ Proposed / Accepted / Superseded
 - 统一推理入口采用用户手动任务选择，不在第一版中自动推断任务意图。
 - 明确各任务保留自身输入与输出契约；总路由不得把场景分类、目标计数和指代分割强制包装成相同的图像文本输入或 mask 输出。
 - 指代分割单图推理由 `tasks/refseg/inference.py` 承担，必须复用训练一致的 OpenCLIP token 特征和 checkpoint validation 阈值。
+
+### 2026-08-31 RefSeg 严格单 checkpoint 补充
+
+- 用户明确取消 RefSeg 的旧 checkpoint 文件名兼容和训练恢复 checkpoint。
+- RefSeg 训练、训练后 test 和交付统一只使用 `weights/best_raw.pt`；不得恢复 `best.pt`、`last.pt` 或独立恢复状态目录。
 
 ### 2026-08-30 本地 Web 界面与路由骨架补充
 
