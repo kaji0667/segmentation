@@ -1101,3 +1101,5 @@ Follow-up interface review:
 - Removed the decorative three-step strip after direct user review.
 - Replaced the oversized three-card layout with compact configuration-driven task items using `auto-fit`, so additional task definitions can be appended without redesigning the section.
 - Hid the complete analysis workspace until a user selects a task; selection then reveals the task-owned inputs and scrolls to the workspace.
+- Aligned user-facing task names with the competition wording: `场景分类` and `语义分割`; internal task IDs and the RefSeg implementation remain unchanged.
+- Allowed compact task descriptions to wrap to two lines and increased item height only from 88px to 98px, removing the premature ellipsis without returning to oversized cards.

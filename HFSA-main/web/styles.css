@@ -280,7 +280,7 @@ button { color: inherit; }
   grid-template-columns: 38px minmax(0, 1fr) 20px;
   gap: 12px;
   align-items: center;
-  min-height: 88px;
+  min-height: 98px;
   overflow: hidden;
   padding: 14px 15px;
   text-align: left;
@@ -324,7 +324,16 @@ button { color: inherit; }
 
 .task-copy { min-width: 0; }
 .task-copy strong { display: block; margin-bottom: 5px; font-size: 14px; }
-.task-copy small { display: block; overflow: hidden; color: var(--muted); font-size: 10px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.task-copy small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .task-chevron { color: var(--accent); font-size: 17px; transition: transform 180ms ease; }
 .task-card:hover .task-chevron,
 .task-card.selected .task-chevron { transform: translateX(3px); }

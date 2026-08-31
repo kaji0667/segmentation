@@ -24,12 +24,16 @@ class _DummyAdapter:
 
 class WebRoutingTest(unittest.TestCase):
     def test_three_task_input_contracts_remain_distinct(self):
-        self.assertEqual([field.key for field in get_task_config("classification").inputs], ["image"])
+        classification = get_task_config("classification")
+        refseg = get_task_config("refseg")
+        self.assertEqual(classification.title, "场景分类")
+        self.assertEqual(refseg.title, "语义分割")
+        self.assertEqual([field.key for field in classification.inputs], ["image"])
         self.assertEqual(
             [field.key for field in get_task_config("counting").inputs],
             ["image", "target_class"],
         )
-        self.assertEqual([field.key for field in get_task_config("refseg").inputs], ["image", "text"])
+        self.assertEqual([field.key for field in refseg.inputs], ["image", "text"])
 
     def test_task_catalog_is_json_serializable_and_project_relative(self):
         router = TaskRouter()
