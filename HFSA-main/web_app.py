@@ -77,7 +77,10 @@ class HFSARequestHandler(BaseHTTPRequestHandler):
             self._send_bytes(HTTPStatus.NO_CONTENT, b"", "image/x-icon")
             return
         if path == "/api/health":
-            self._send_json(HTTPStatus.OK, {"status": "ok", "service": "hfsa-web"})
+            self._send_json(
+                HTTPStatus.OK,
+                {"status": "ok", "service": "remote-sensing-multitask-web"},
+            )
             return
         if path == "/api/tasks":
             self._send_json(HTTPStatus.OK, {"tasks": self.server.router.list_tasks()})
@@ -142,7 +145,7 @@ def main(argv: list[str] | None = None) -> None:
     actual_host, actual_port = server.server_address[:2]
     browser_host = "127.0.0.1" if actual_host in {"0.0.0.0", "::"} else actual_host
     url = f"http://{browser_host}:{actual_port}"
-    print("HFSA web interface is ready.")
+    print("Remote-sensing image-text interpretation interface is ready.")
     print(f"Open: {url}")
     print("Press Ctrl+C to stop.")
     if args.open_browser:
@@ -150,7 +153,7 @@ def main(argv: list[str] | None = None) -> None:
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nStopping HFSA web interface...")
+        print("\nStopping remote-sensing interface...")
     finally:
         server.server_close()
 

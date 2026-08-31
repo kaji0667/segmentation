@@ -1103,3 +1103,4 @@ Follow-up interface review:
 - Hid the complete analysis workspace until a user selects a task; selection then reveals the task-owned inputs and scrolls to the workspace.
 - Aligned user-facing task names with the competition wording: `场景分类` and `语义分割`; internal task IDs and the RefSeg implementation remain unchanged.
 - Allowed compact task descriptions to wrap to two lines and increased item height only from 88px to 98px, removing the premature ellipsis without returning to oversized cards.
+- Replaced the user-facing HFSA brand with the official project name `遥感图-文可解释轻量化多任务智能解译系统`; the browser title and Hero carry the full name, while the compact header uses `遥感图-文智能解译` plus the three project attributes.

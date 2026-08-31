@@ -69,7 +69,8 @@ class WebRoutingTest(unittest.TestCase):
                 self.assertEqual(len(json.load(response)["tasks"]), 3)
             with urlopen(f"http://{host}:{port}/", timeout=3) as response:
                 html = response.read().decode("utf-8")
-                self.assertIn("HFSA 遥感智能分析", html)
+                self.assertIn("遥感图-文可解释轻量化多任务智能解译系统", html)
+                self.assertNotIn(">HFSA<", html)
                 self.assertNotIn('class="steps"', html)
                 self.assertRegex(html, r'<section class="workspace" id="workspace"[^>]*hidden>')
         finally:
