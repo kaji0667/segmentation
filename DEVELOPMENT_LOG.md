@@ -1138,3 +1138,4 @@ Follow-up interface review:
 - 将三个当前 Head 测试合并为 `test_refseg_head.py`，并将文本输入、YOLOv12m 默认测试改为 `refseg` 命名。
 - 原 Head 9 条、文本输入 2 条、默认配置 2 条测试全部保留，没有修改运行时代码。
 - 新文件定向 `13/13`、发布仓库全库 CPU `65/65` 通过。
+- 提交 `dbb9d4b test(refseg): consolidate current architecture coverage` 已推送到 GitHub `main`。

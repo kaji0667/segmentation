@@ -7,6 +7,7 @@
 - 三个仍验证当前 Head 的 `test_semseg_*` 文件合并为 `test_refseg_head.py`；文本输入与默认配置测试分别改名为 `test_refseg_text_inputs.py`、`test_refseg_defaults.py`。
 - 原有 13 条断言全部保留；新文件定向 `13/13`、全库 CPU `65/65` 通过。
 - 本次只调整测试文件组织与名称，不修改运行时代码或模型结构。
+- 提交 `dbb9d4b` 已推送到 GitHub `main`。
 
 ## 2026-08-31 最新状态：RefSeg 严格单 checkpoint
 

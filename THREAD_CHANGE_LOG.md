@@ -323,3 +323,4 @@
 
 - 三个 Head 测试合并为 `test_refseg_head.py`；文本输入和默认配置测试改为 `test_refseg_*` 命名。
 - 13 条有效断言全部保留，定向 `13/13`、全库 CPU `65/65` 通过；运行时代码不变。
+- 提交 `dbb9d4b` 已推送到 GitHub `main`。
