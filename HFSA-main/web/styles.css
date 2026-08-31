@@ -485,6 +485,28 @@ button { color: inherit; }
 }
 
 .refseg-result { width: 100%; padding: 14px; }
+.result-warning,
+.translation-note {
+  margin-bottom: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  font-size: 9px;
+  line-height: 1.55;
+}
+.result-warning {
+  color: #a33b34;
+  border: 1px solid #f1d1cd;
+  background: #fff3f1;
+}
+.translation-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: #66758b;
+  border: 1px solid #dce6f2;
+  background: #f6f9fd;
+}
+.translation-note strong { color: #354a6c; }
 .result-gallery {
   display: grid;
   grid-template-columns: 1fr 1fr;

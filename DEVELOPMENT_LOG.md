@@ -1113,3 +1113,13 @@ Follow-up interface review:
 - 延迟加载审计确认 `create_default_router()` 后 `tasks.refseg.inference` 不在 `sys.modules`；RefSeg Adapter 定向 `3/3`、Web 路由 `8/8`、活动副本与发布仓库全库均为 `67/67`，`node --check web/app.js` 通过。
 - 真实 HTTP smoke：`03600.jpg` + `The gray small windmill`，epoch 44、阈值 `0.70`、输入尺寸 `512`、原图/输出 `800×800`、前景像素 `1976`、前景占比 `0.0030875`；`/api/predict` 返回 HTTP 200 和三张 PNG data URL，与此前直接 Predictor smoke 一致。
 - 本次没有修改 Backbone、Neck、OpenCLIP、`TextPromptSegment`、Loss、训练流程或 checkpoint 格式；没有恢复 `train_semseg.py`。
+
+## 2026-08-31 RefSeg 中文提示转译与空结果反馈
+
+- 在 RefSeg Web Adapter 增加离线中文转译，覆盖 RRSIS-D 常见类别及位置、颜色、大小修饰；英文提示原样通过，复杂多类别中文关系显式报错。
+- 推理摘要新增 `input_prompt`、`model_prompt`、`prompt_translated` 和 `found_target`，结果区显示实际英文模型提示。
+- Mask 完全为空时，页面改为“未找到符合描述的目标”，不再仅显示“任务执行完成”。
+- 定向测试扩展到中文转译、重叠类别词、复杂描述拒绝和 Adapter 透传；新增 ADR-0028。
+- 真实 HTTP smoke：截图中的飞机图输入“最上方的飞机”，自动转为 `the topmost airplane`，阈值 `0.70`，输出 1357 个前景像素，`found_target=true`。
+- RefSeg Adapter 定向测试 `6/6`、Web 路由 `8/8`、活动副本全库 `71/71`、发布仓库全库 `70/70` 和 JavaScript 语法检查通过；活动副本保留一项额外本地回归测试。
+- 本次只修改 Web 推理预处理与展示，不修改 OpenCLIP、RefSeg checkpoint、模型 forward 或训练协议。

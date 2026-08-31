@@ -224,6 +224,24 @@ function renderRefsegResult(result) {
   const content = document.createElement("div");
   content.className = "refseg-result";
 
+  if (summary.found_target === false || Number(summary.foreground_pixels) === 0) {
+    const warning = document.createElement("div");
+    warning.className = "result-warning";
+    warning.textContent = "未找到符合描述的目标。请补充位置、颜色或大小信息后重试。";
+    content.appendChild(warning);
+  }
+
+  if (summary.prompt_translated && summary.model_prompt) {
+    const translation = document.createElement("div");
+    translation.className = "translation-note";
+    const label = document.createElement("span");
+    const value = document.createElement("strong");
+    label.textContent = "中文提示已转译为";
+    value.textContent = summary.model_prompt;
+    translation.append(label, value);
+    content.appendChild(translation);
+  }
+
   const gallery = document.createElement("div");
   gallery.className = "result-gallery";
   gallery.append(
@@ -311,8 +329,13 @@ runButton.addEventListener("click", async () => {
     });
     const payload = await response.json();
     if (response.ok) {
-      setMessage("任务执行完成。", "success");
       renderResult(state.selectedTask.task_id, payload.result);
+      const emptyRefseg = state.selectedTask.task_id === "refseg"
+        && Number(payload.result?.summary?.foreground_pixels) === 0;
+      setMessage(
+        emptyRefseg ? "未找到符合描述的目标，请调整描述后重试。" : "任务执行完成。",
+        emptyRefseg ? "error" : "success",
+      );
       interfaceStatusChip.textContent = "模型已加载";
       interfaceStatusChip.classList.add("ready");
     } else if (payload.status === "interface_pending") {

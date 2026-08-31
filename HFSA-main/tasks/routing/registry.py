@@ -83,8 +83,8 @@ _TASKS: tuple[TaskConfig, ...] = (
                 key="text",
                 label="描述需要提取的目标",
                 kind="text",
-                placeholder="例如：左侧灰色的小型风力发电机",
-                help_text="位置、颜色、大小等描述可以帮助系统区分目标。",
+                placeholder="例如：最上方的飞机 / the topmost airplane",
+                help_text="支持常见中文遥感类别与位置、颜色、大小描述；复杂关系建议使用英文。",
             ),
         ),
         outputs=(

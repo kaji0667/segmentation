@@ -13,11 +13,14 @@
 - 新增 `tasks/routing/adapters/refseg.py::RefSegAdapter`：浏览器 data URL 解码后调用现有 `RefSegPredictor`，返回叠加图、二值 Mask、概率图和 JSON 摘要；支持 `HFSA_REFSEG_CHECKPOINT`、`HFSA_REFSEG_DEVICE` 覆盖。
 - 默认路由只注册 RefSeg。页面启动和任务列表请求不会导入 `tasks.refseg.inference` 或加载 PyTorch/OpenCLIP；第一次真实分割请求才加载 checkpoint，实例随后缓存并在服务关闭时释放。
 - RefSeg 结果区展示阈值、前景占比、模型耗时、原图尺寸，并提供三张 PNG 下载。分类和计数继续返回 `interface_pending`，不伪装成真实推理结果。
+- RefSeg Adapter 新增确定性中文提示转译：覆盖 RRSIS-D 常见类别和位置、颜色、大小描述，结果区显示实际英文模型提示；复杂多目标/关系描述显式要求改用英文。
+- 空 Mask 现在显示“未找到符合描述的目标”，不再把请求成功误写成语义分割成功。
 - HTTP JSON 上限为 64 MiB，浏览器与 Adapter 限制单张原始图像不超过 40 MiB；推理异常统一返回 `inference_error`。
 - 公网 IP、域名、HTTPS、鉴权和反向代理仍留到部署阶段处理。
 - 本阶段不修改任何 Backbone、Neck、OpenCLIP、任务 Head、Loss、训练流程或 checkpoint 格式。
-- RefSeg Web Adapter 定向测试 `3/3`、Web 路由定向测试 `8/8`、活动副本与发布仓库全库回归均为 `67/67`，`node --check web/app.js` 通过。
+- RefSeg Web Adapter 定向测试 `6/6`、Web 路由定向测试 `8/8`、活动副本全库 `71/71`、发布仓库全库 `70/70`，`node --check web/app.js` 通过；活动副本多一项既有本地回归测试。
 - 真实 HTTP smoke 使用 `03600.jpg` 和 `The gray small windmill`：严格加载 epoch-44 `best_raw.pt`，阈值 `0.70`，返回 `800×800` 结果、前景像素 `1976`、前景占比 `0.0030875`，与直接 Predictor smoke 一致。
+- 中文真实 HTTP smoke 使用飞机图和“最上方的飞机”：自动转为 `the topmost airplane`，返回 1357 个前景像素，`found_target=true`。
 
 ## 2026-08-30 最新状态：指代分割单图推理边界
 

@@ -194,11 +194,13 @@ The inference router uses explicit manual task selection. After selection, each 
 - `config.py` owns JSON-serializable task/input/output definitions.
 - `registry.py` owns display order, project-relative checkpoint defaults, user-facing labels and the three distinct contracts.
 - `router.py` owns task lookup, schema validation, lazy Adapter factory registration, instance reuse and release.
-- `adapters/refseg.py` owns browser image decoding, lazy `RefSegPredictor` construction, serialized prediction execution, PNG data-URL encoding and model resource release.
+- `adapters/refseg.py` owns browser image decoding, bounded Chinese-to-English prompt translation, lazy `RefSegPredictor` construction, serialized prediction execution, PNG data-URL encoding and model resource release.
 
 The default Web router registers only RefSeg. Registration itself imports no model code; the adapter and `RefSegPredictor` are constructed on the first prediction request, then cached for later requests. RefSeg accepts a browser image payload plus text and returns task-owned summary metadata together with overlay, mask and probability PNG data URLs. Counting and classification remain unregistered and return `interface_pending`; they must later receive separate thin Adapters around their own predictors and keep their own output schemas.
 
 `web_app.py` limits request JSON to 64 MiB, converts uncaught inference failures into structured `inference_error` responses and closes cached adapters with the server. The native front end limits raw image files to 40 MiB, renders RefSeg-specific results and exposes direct PNG downloads. Public hosting, authentication, HTTPS and reverse proxy configuration remain outside this local interface module.
+
+The RefSeg checkpoint remains in its English OpenCLIP prompt domain. The Web adapter performs deterministic offline translation only for supported RRSIS-D categories and basic position/color/size modifiers, records both the input and model prompts, and rejects unsupported multi-category or complex Chinese relations. It does not replace the text encoder or claim general machine translation. An empty binary mask is rendered as a no-target result rather than a successful semantic match. See ADR-0028.
 
 ## Text-Guided Object Counting Task
 

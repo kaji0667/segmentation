@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from tasks.routing import get_task_config
-from tasks.routing.adapters.refseg import RefSegAdapter
+from tasks.routing.adapters.refseg import RefSegAdapter, translate_refseg_prompt
 
 
 def _image_payload() -> dict[str, str]:
@@ -57,6 +57,25 @@ class _DummyPredictor:
 
 
 class RefSegWebAdapterTest(unittest.TestCase):
+    def test_supported_chinese_prompt_is_translated_for_checkpoint_domain(self):
+        self.assertEqual(
+            translate_refseg_prompt("最上方的飞机"),
+            ("the topmost airplane", True),
+        )
+        self.assertEqual(
+            translate_refseg_prompt("左侧灰色的小型风力发电机"),
+            ("the small gray windmill on the left", True),
+        )
+        self.assertEqual(
+            translate_refseg_prompt("the topmost airplane"),
+            ("the topmost airplane", False),
+        )
+        self.assertEqual(translate_refseg_prompt("飞机场"), ("the airport", True))
+
+    def test_unsupported_complex_chinese_prompt_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "复杂描述请使用英文"):
+            translate_refseg_prompt("飞机旁边的车辆")
+
     def test_adapter_lazily_builds_predictor_and_encodes_png_results(self):
         with tempfile.TemporaryDirectory() as directory:
             checkpoint = Path(directory) / "best_raw.pt"
@@ -109,6 +128,22 @@ class RefSegWebAdapterTest(unittest.TestCase):
                 )
                 serialized = json.dumps(adapter.predict(_image_payload(), "windmill"))
             self.assertIn("foreground_ratio", serialized)
+
+    def test_adapter_sends_translated_prompt_and_reports_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "best_raw.pt"
+            checkpoint.write_bytes(b"placeholder")
+            predictor = _DummyPredictor()
+            with patch.dict(os.environ, {"HFSA_REFSEG_CHECKPOINT": str(checkpoint)}, clear=False):
+                adapter = RefSegAdapter(
+                    get_task_config("refseg"),
+                    predictor_factory=lambda **kwargs: predictor,
+                )
+                result = adapter.predict(_image_payload(), "最上方的飞机")
+            self.assertEqual(predictor.calls, [((3, 2), "the topmost airplane")])
+            self.assertTrue(result["summary"]["prompt_translated"])
+            self.assertEqual(result["summary"]["input_prompt"], "最上方的飞机")
+            self.assertEqual(result["summary"]["model_prompt"], "the topmost airplane")
 
 
 if __name__ == "__main__":
