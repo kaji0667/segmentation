@@ -6,6 +6,7 @@ router. Unknown questions raise an error rather than fabricate a valid answer.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -102,6 +103,47 @@ class AdapterFailure(ValueError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+def _capture_replay_request(request: dict[str, Any]) -> None:
+    """Optional private request copy for local replay, excluding credentials/gold."""
+    directory = os.environ.get("HFSA_API_REPLAY_DIR", "").strip()
+    if not directory:
+        return
+    try:
+        fields = ("protocol_version", "request_id", "item_id", "question", "answer_type",
+                  "choices", "image_width", "image_height")
+        payload = {name: request[name] for name in fields if name in request}
+        payload["images"] = [
+            {name: spec[name] for name in ("asset_id", "sha256", "mime_type") if name in spec}
+            for spec in request.get("images", [])
+        ]
+        fields = ("type", "values", "case_insensitive", "question_form", "coordinate_format",
+                  "length", "min_length", "minimum")
+        payload["response_constraint"] = {
+            name: request["response_constraint"][name]
+            for name in fields if name in request.get("response_constraint", {})
+        }
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, allow_nan=False,
+                             separators=(",", ":")).encode("utf-8")
+        if len(encoded) > 128 * 1024:
+            raise ValueError("Replay request exceeds protocol size limit")
+        target = Path(directory).expanduser()
+        target.mkdir(parents=True, exist_ok=True)
+        path = target / (hashlib.sha256(encoded).hexdigest() + ".json")
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            return
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(encoded)
+    except Exception as error:
+        # Capture errors must not fail inference or reveal request/exception text.
+        try:
+            print(json.dumps({"event": "hfsa_api_replay_capture", "status": "failed",
+                              "error_type": type(error).__name__}), file=sys.stderr, flush=True)
+        except OSError:
+            pass
 
 
 def _prediction_diagnostic(request: dict[str, Any], image_count: int,
@@ -339,6 +381,7 @@ class HFSAAdapter:
     def predict(self, request: dict[str, Any], image_paths: list[Path]) -> str | list[int]:
         started = time.monotonic()
         plan = None
+        _capture_replay_request(request)
         try:
             if len(image_paths) != 1:
                 raise AdapterFailure("unsupported_image_count", "HFSA API currently supports one image; two-image change/VQA tasks are unsupported")

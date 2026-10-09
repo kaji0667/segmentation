@@ -3,11 +3,12 @@
 import io
 import json
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 
@@ -202,6 +203,41 @@ class DiagnosticTests(unittest.TestCase):
         self.assertNotIn("answer", success)
         self.assertEqual((failure["reason"], failure["image_count"]), ("unsupported_image_count", 2))
         self.assertEqual(self.counting.predict.call_count, 1)
+
+
+    def test_failed_request_is_privately_captured_without_credentials_or_gold(self):
+        value = request("Describe this private replay question.", "short_text",
+                        protocol_version="2.0", item_id="TEST_REPLAY", request_id="test:replay:1")
+        value.update(headers={"Authorization": "secret-header"}, api_key="secret-key", answer="secret-gold")
+        value["images"] = [{"asset_id": "a" * 32, "sha256": "b" * 64,
+                            "mime_type": "image/png", "path": "/secret-path"}]
+        value["response_constraint"]["api_key"] = "secret-constraint"
+        with tempfile.TemporaryDirectory() as directory, patch.dict("os.environ", {"HFSA_API_REPLAY_DIR": directory}):
+            output = io.StringIO()
+            for _ in range(2):
+                with redirect_stderr(output), self.assertRaises(AdapterFailure):
+                    self.predict(value)
+            files = list(Path(directory).glob("*.json"))
+            self.assertEqual(len(files), 1)
+            saved = files[0].read_text(encoding="utf-8")
+            payload = json.loads(saved)
+        self.assertEqual(payload["question"], value["question"])
+        self.assertNotIn(value["question"], output.getvalue())
+        self.assertEqual(payload["response_constraint"], {"type": "short_text"})
+        for secret in ("secret-header", "secret-key", "secret-gold", "/secret-path", "secret-constraint"):
+            self.assertNotIn(secret, saved)
+
+    def test_capture_failure_does_not_change_successful_prediction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            invalid_directory = Path(directory) / "private-path"
+            invalid_directory.write_text("occupied", encoding="utf-8")
+            output = io.StringIO()
+            with patch.dict("os.environ", {"HFSA_API_REPLAY_DIR": str(invalid_directory)}), redirect_stderr(output):
+                self.assertEqual(self.predict(request("How many ships?", "integer")), "3")
+        rows = list(map(json.loads, output.getvalue().splitlines()))
+        self.assertEqual(rows[0]["event"], "hfsa_api_replay_capture")
+        self.assertEqual(rows[-1]["status"], "succeeded")
+        self.assertNotIn("private-path", output.getvalue())
 
 
 if __name__ == "__main__":

@@ -1189,3 +1189,11 @@ Follow-up interface review:
 - 主模块仅改HFSAAdapter：增加继承ValueError的AdapterFailure固定代码，以及predict边界的本地JSON诊断。继续复用同一Predictor与作答策略；不改变官方server、公网错误内容、模型结构、阈值或权重。
 - WSL同环境 `python -m unittest discover -s participant_api_starter-main/tests -v`：28/28，2.055秒。新增验证已知拒绝原因、成功/双图行为保持、异常文字/私有路径不进入日志；既有协议及四任务格式回归通过。发布副本三文件与交付已同步。
 - 保留当前Key/环境/启动参数，以SIGINT结束唯一原WSL API后启动后台替代进程。日志在用户AppData；随后实际核验本机与公网healthz200/ready，真实合成分类200/chimney；未知合成问法500且日志reason=unsupported_question_form，公网仍只返回inference_failed。没有ngrok跳过头、没有保存密钥或触发官网重试。下一步用户8题smoke配对原因码，识别适配与能力缺口。
+
+## 2026-10-09 用户8次smoke预算与本地请求重放验证
+
+- 用户明确当天总额度8次；未确认剩余次数，停止仅为收集错误码而建议官网重跑。audit缺题干及实际约束，现有诊断不能回溯原7题；原0分未改变。
+- HFSA Adapter的可选本机私有捕获保存协议白名单，默认关闭，不含认证头/未知字段/答案/金标；失败请求也留存、按内容去重、I/O错误不改变作答。新增loopback重放工具，不访问官网，禁用代理/重定向，不评估准确率。
+- 原28项与6项新增捕获/重放行为测试34/34，4.648秒。验证失败请求保存及私有字段剔除、去重、I/O失败仍成功推理、HTTP500及200非法选项识别、公网URL拒绝与302不跟随。测试使用独立合成资产，无官方题干或金标。
+- API保留原参数/Key并后台重启启用capture。本机和ngrok鉴权health均200；用官方包图片加独立合成题种下分类200和未知问法500两条请求。本地保存2个哈希文件，Key/headers/answer/gold均未出现；随后仅loopback重放200/有效格式和500/不支持，两文件去重保持2个。没有官网run、准确率或原7题已修复结论。
+- 当前PID1430、日志及私有请求目录记录在CURRENT_STATE；源码/README/架构/ADR更新，不把请求文件、账号令牌、原下载audit/predictions复制到发布Git。后续真实题型仍需实际请求证据，先保留用户每日额度。
