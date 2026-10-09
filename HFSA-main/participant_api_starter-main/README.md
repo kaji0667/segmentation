@@ -213,7 +213,7 @@ python participant_api_starter-main/server.py \
   --host 127.0.0.1 --port 9001
 ```
 
-四任务均在监听前加载一次，检测与计数共用一个既有 OpenCLIP 文本编码器；分割保留自己的 token encoder。启动会显示加载进度，等待 `API listening` 才表示可以接题。当前本机启动约 101 秒，单次检查峰值 PyTorch 显存约 3.86 GiB；这不是正式效率评测。
+四任务均在监听前加载一次，检测与计数共用一个既有 OpenCLIP 文本编码器；分割保留自己的 token encoder。启动会显示加载进度，等待 `API listening` 才表示可以接题。此前本机合成 smoke 启动约 101 秒，实际加载可能更久，以监听及 ready 为准，单次检查峰值 PyTorch 显存约 3.86 GiB；这不是正式效率评测。
 
 | 任务 | 已支持题干示例 | 返回方式 |
 | --- | --- | --- |
@@ -226,6 +226,12 @@ python participant_api_starter-main/server.py \
 分类支持 checkpoint 中的 21 个场景类别，选项的英文别名或简单中文必须能映射到这些类别；含未知类或重复同义选项则报错。检测/计数要求明确的遥感目标类别。中文复杂关系仍由现有翻译器明确拒绝；英文 RefSeg 表达保持原样送入模型。计数保持原 `conf=0.15`、`IoU=0.5`、`max_det=300` 和独立计数权重，不增加空间关系计数策略。
 
 未知题型、双图变化、通用问答、空间/多类别计数、空目标及空定位结果均失败，通过官方外壳返回 HTTP 500 `inference_failed`。本实现不是通用视觉语言模型，不保证覆盖整个开发集。官方 `check_api.py` 的 `Is there anything...` 合成题仍不支持，因为它没有指定目标类别；不要把该题失败误判为鉴权或连通故障。
+
+本地 Adapter 现在会向 stderr 输出一行 `hfsa_api_prediction` JSON 诊断，包含题号、请求编号、答案约束、图片数量、所选任务、耗时及固定失败代码。它不记录题干、选项、答案、图片路径、认证头或原始异常文字；公网错误响应仍由官方 `server.py` 处理。代码更新后须重启 API 才能生效。
+
+常见 `reason`：`unsupported_question_form` 为未覆盖的问法；`unsupported_image_count` 为当前不支持的双图任务；`unsupported_scene_options` 为场景选项超出分类权重类别；`unsupported_spatial_or_multi_category_count` 为未实现的计数条件；`empty_refseg_mask` / `empty_detections` 为模型未找到目标；`unexpected_exception` 为需要继续排查的异常，同时记录异常类型。诊断只解释失败类别，不会把未知题转为猜测答案，也不会自动提高成绩。
+
+如果官网 `audit` 显示 HTTP 500，而 `predictions` 缺少相应行，应结合本机这些诊断定位；audit 本身只包含状态/摘要，不能还原题干或 Python 异常。先排查 8 题 smoke，不重复运行 full。后台运行时本机日志位置见项目 CURRENT_STATE，账号令牌及原始评测下载文件不纳入 Git。
 
 可重复检查：
 

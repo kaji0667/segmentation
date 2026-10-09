@@ -1,7 +1,10 @@
 """Synthetic predictor fixtures exercise routing/formatting, not model accuracy."""
 
+import io
+import json
 import sys
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -9,7 +12,7 @@ from unittest.mock import Mock
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hfsa_adapter import HFSAAdapter, parse_question
+from hfsa_adapter import AdapterFailure, HFSAAdapter, parse_question
 
 
 def request(question, kind="short_text", **kwargs):
@@ -156,6 +159,49 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.predict(request("How many colors are there in the image?", "integer"))
         self.counting.predict.assert_not_called()
+
+
+class DiagnosticTests(unittest.TestCase):
+    # Reuse predictor fixtures, without inheriting their test cases a second time.
+    setUp = AdapterTests.setUp
+    predict = AdapterTests.predict
+
+    def test_expected_failure_is_identified_without_logging_question(self):
+        value = request("Describe this private question text.", item_id="TEST_DIAGNOSTIC",
+                        request_id="test:diagnostic:1")
+        output = io.StringIO()
+        with redirect_stderr(output), self.assertRaises(AdapterFailure):
+            self.predict(value)
+        record = json.loads(output.getvalue())
+        self.assertEqual(record["reason"], "unsupported_question_form")
+        self.assertEqual(record["item_id"], "TEST_DIAGNOSTIC")
+        self.assertIsNone(record["task"])
+        self.assertNotIn("private question", output.getvalue())
+
+    def test_unexpected_exception_text_and_paths_remain_private(self):
+        self.classification.predict.side_effect = RuntimeError("private-prompt private-key /private/model/path")
+        value = request("Which scene category is shown?", item_id="TEST_DIAGNOSTIC")
+        output = io.StringIO()
+        with redirect_stderr(output), self.assertRaises(RuntimeError):
+            self.predict(value)
+        record = json.loads(output.getvalue())
+        self.assertEqual((record["task"], record["reason"], record["error_type"]),
+                         ("classification", "unexpected_exception", "RuntimeError"))
+        for secret in ("private-prompt", "private-key", "/private/model/path"):
+            self.assertNotIn(secret, output.getvalue())
+
+    def test_success_and_two_image_failure_keep_existing_behavior(self):
+        value = request("How many ships?", "integer", item_id="TEST_DIAGNOSTIC")
+        output = io.StringIO()
+        with redirect_stderr(output):
+            self.assertEqual(self.predict(value), "3")
+            with self.assertRaises(AdapterFailure):
+                self.adapter.predict(value, [self.image, self.image])
+        success, failure = map(json.loads, output.getvalue().splitlines())
+        self.assertEqual((success["status"], success["task"]), ("succeeded", "counting"))
+        self.assertNotIn("answer", success)
+        self.assertEqual((failure["reason"], failure["image_count"]), ("unsupported_image_count", 2))
+        self.assertEqual(self.counting.predict.call_count, 1)
 
 
 if __name__ == "__main__":

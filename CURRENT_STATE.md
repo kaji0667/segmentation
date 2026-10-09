@@ -1,5 +1,13 @@
 # CURRENT_STATE.md
 
+## 2026-10-09 最新状态：官网8题smoke已完成，7题推理500；已补诊断
+
+- 用户提供官网下载 audit 与 predictions：8题完成，7题为HTTP500，只有1题HTTP200并返回字符串 `"1"`；该有效答案评分为0，missing=7，malformed=0。结果是开发集连通性smoke，不能称正式客观成绩，也不能将7个缺失答案说成7个模型正常作答但错误。原下载文件留在用户下载目录，不复制到Git。
+- 本次公网预检已通过，原密钥排错阶段已被用户实际评测覆盖。7项500来自模型适配/推理异常；官方server将异常统一转换为inference_failed，audit没有题干或原始异常，暂不能逐项断言是哪个分支拒绝。
+- 已在HFSAAdapter加入固定原因码的本地JSON诊断：题号/请求编号、约束类型、图片数、所选任务、状态、耗时及异常类型。既有拒绝仍为ValueError子类并继续返回500，没有默认猜测答案，不记录题干、选项、答案、图片路径、认证头或原始异常文字。官方server及全部模型/训练结构未改。
+- 原25项与新增3项诊断/隐私回归共28/28通过。交付与发布副本的Adapter、测试、README已同步。为生效已以同一启动参数、密钥和权重环境重启API至WSL后台（本轮PID914），保留ngrok；已实际核验本机与ngrok公网鉴权healthz均200/ready；真实模型的独立合成分类请求200/chimney，未知合成问法500/inference_failed，本地准确记录unsupported_question_form，没有ngrok跳过头。本机日志为 `%LOCALAPPDATA%/HFSA/PublicAPI/hfsa-api-diagnostics-20261009-112714.log`，不纳入Git。原用户WSL前台命令已退出，不应再重复启动9001。
+- 当前实现仍只覆盖有明确支持形式的分类/检测/计数/RefSeg单图题；双图变化、通用问答等仍未实现。下一步由用户再运行一次8题smoke，将新audit与本机原因码对齐，再只修正有证据且现有模型能作答的适配问题；不盲跑full或承诺全部题型可覆盖。
+
 ## 2026-10-09 当前排错：官网预检失败与运行密钥重复粘贴
 
 - 用户报告官网 `invalid_submission / participant preflight failed (http_error)`。ngrok 仍在线，日志有评测服务器到本机9001的连接；关闭了 HTTP inspection，尚未观察官网该次请求的实际响应码，不能直接断言官网收到401。

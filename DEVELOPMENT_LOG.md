@@ -1181,3 +1181,11 @@ Follow-up interface review:
 - 仅在检查进程内存读取现有API的MODEL_API_KEY：86字符，无空白，两个43字符半段完全相同。实际值的本机和公网healthz均200/ready；单个43字符半段的公网healthz为401/unauthorized。请求头及密钥值未输出、落盘或纳入Git。
 - Python标准API客户端不加ngrok专用头也收到200/JSON。PowerShell默认User-Agent另收到ERR_NGROK_6024提示，不能混为官网预检响应。
 - 建议先将官网模型Key与运行服务的实际值对齐、核对origin后由用户重试。可控浏览器官网未登录，未检查用户原填写值、未触发网站评测，尚无官网预检成功结论；没有修改代码或放宽认证。
+
+## 2026-10-09 首次官网8题smoke审计与Adapter诊断
+
+- 用户运行的官方开发smoke：8项audit，7项HTTP500、1项HTTP200；predictions只有1行，答案为字符串1。评分missing=7、malformed=0、valid=1、总分0。下载未含题干或Python异常，不能据此还原每题拒绝原因，原文件不复制或公开到Git。
+- 检查官方server：验证/资产错误另有400/422等；Adapter或Predictor的普通异常会统一返回500/inference_failed。现有bounded Adapter有明确的能力拒绝分支，尚无7题逐项的异常证据，不将全部归为网络问题或格式问题。
+- 主模块仅改HFSAAdapter：增加继承ValueError的AdapterFailure固定代码，以及predict边界的本地JSON诊断。继续复用同一Predictor与作答策略；不改变官方server、公网错误内容、模型结构、阈值或权重。
+- WSL同环境 `python -m unittest discover -s participant_api_starter-main/tests -v`：28/28，2.055秒。新增验证已知拒绝原因、成功/双图行为保持、异常文字/私有路径不进入日志；既有协议及四任务格式回归通过。发布副本三文件与交付已同步。
+- 保留当前Key/环境/启动参数，以SIGINT结束唯一原WSL API后启动后台替代进程。日志在用户AppData；随后实际核验本机与公网healthz200/ready，真实合成分类200/chimney；未知合成问法500且日志reason=unsupported_question_form，公网仍只返回inference_failed。没有ngrok跳过头、没有保存密钥或触发官网重试。下一步用户8题smoke配对原因码，识别适配与能力缺口。

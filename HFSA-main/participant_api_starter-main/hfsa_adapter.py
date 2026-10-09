@@ -6,10 +6,12 @@ router. Unknown questions raise an error rather than fabricate a valid answer.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -94,6 +96,44 @@ class QuestionPlan:
     target: str = ""
 
 
+class AdapterFailure(ValueError):
+    """Expected adapter rejection with a fixed, safe diagnostic code."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def _prediction_diagnostic(request: dict[str, Any], image_count: int,
+                           plan: QuestionPlan | None, started: float,
+                           error: Exception | None = None) -> None:
+    # Never log question/choices/answers, image paths, headers or exception text.
+    def identifier(value: Any) -> str | None:
+        if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value):
+            return value
+        return None
+
+    kind = request.get("response_constraint", {}).get("type")
+    record = {
+        "event": "hfsa_api_prediction",
+        "item_id": identifier(request.get("item_id")),
+        "request_id": identifier(request.get("request_id")),
+        "constraint_type": kind if kind in {"enum", "single_choice", "short_text", "integer", "bbox"} else None,
+        "image_count": image_count,
+        "task": plan.task if plan is not None else None,
+        "status": "failed" if error is not None else "succeeded",
+        "elapsed_ms": round((time.monotonic() - started) * 1000),
+    }
+    if error is not None:
+        record["reason"] = error.code if isinstance(error, AdapterFailure) else "unexpected_exception"
+        record["error_type"] = type(error).__name__
+    try:
+        print(json.dumps(record, ensure_ascii=True, separators=(",", ":")), file=sys.stderr, flush=True)
+    except OSError:
+        # An unavailable log destination must not change the prediction result.
+        pass
+
+
 def _question_text(question: str) -> str:
     # Strip only explicit answer-format instructions, never target qualifiers.
     text = re.split(
@@ -119,14 +159,14 @@ def parse_question(request: dict[str, Any]) -> QuestionPlan:
     kind = request["response_constraint"]["type"]
     text = _question_text(request["question"])
     if not text or request["response_constraint"].get("question_form") == "change_region":
-        raise ValueError("Unsupported empty question or change-region task")
+        raise AdapterFailure("unsupported_change_region_or_empty_question", "Unsupported empty question or change-region task")
     count = _match_target(text, _COUNT_PATTERNS)
     if count is not None:
         if kind not in {"integer", "short_text", "single_choice", "enum"}:
-            raise ValueError("Counting requires a numeric answer constraint")
+            raise AdapterFailure("count_constraint_mismatch", "Counting requires a numeric answer constraint")
         # The existing counting checkpoint has no spatial/relation count policy.
         if re.search(r"\b(and|or|not|except|left|right|top|bottom|near|between|above|below)\b|左|右|上方|下方|附近|之间|之外|和|或", count, re.I):
-            raise ValueError("Spatial, relational or multi-category counting is unsupported")
+            raise AdapterFailure("unsupported_spatial_or_multi_category_count", "Spatial, relational or multi-category counting is unsupported")
         return QuestionPlan("counting", count)
     if kind == "bbox":
         detection = re.match(r"^(?:please\s+)?detect\s+|^(?:请)?检测(?:出)?(?:图中|图像中|图片中)?(?:的)?", text, re.I)
@@ -134,7 +174,7 @@ def parse_question(request: dict[str, Any]) -> QuestionPlan:
             target = text[detection.end():].strip()
             target = re.sub(r"\s+(?:in|on)\s+(?:the|this)\s+(?:image|picture|photo)$", "", target, flags=re.I)
             if re.search(r"\b(all|every|each|left|right|top|bottom|near|between)\b|所有|全部|左|右|上方|下方|附近|之间", target, re.I):
-                raise ValueError("Detection bbox accepts one unqualified target; use referring localization for qualifiers")
+                raise AdapterFailure("unsupported_detection_selector", "Detection bbox accepts one unqualified target; use referring localization for qualifiers")
             return QuestionPlan("detection", target)
         target = re.sub(
             r"^(?:请)?(?:框出|定位|分割出)(?:图中的|图中|图像中的|图像中|图片中的|图片中)?\s*|"
@@ -143,16 +183,16 @@ def parse_question(request: dict[str, Any]) -> QuestionPlan:
         )
         target = re.sub(r"\s+(?:in|on)\s+(?:the|this)\s+(?:image|picture|photo)$", "", target, flags=re.I)
         if target == text and re.search(r"\?|？|\b(?:what|which|how|why|is|are)\b", text, re.I):
-            raise ValueError("Unsupported bbox question")
+            raise AdapterFailure("unsupported_bbox_question", "Unsupported bbox question")
         return QuestionPlan("refseg", target)
     presence = _match_target(text, _PRESENCE_PATTERNS)
     if presence is not None and kind in {"enum", "single_choice", "short_text"}:
         if re.search(r"\b(anything|something|objects?|things?|and|or|not)\b|任何|物体|东西|和|或", presence, re.I):
-            raise ValueError("Presence questions require one concrete target category")
+            raise AdapterFailure("unsupported_presence_target", "Presence questions require one concrete target category")
         return QuestionPlan("presence", presence)
     if _SCENE_QUESTION.search(text) and kind in {"short_text", "enum", "single_choice"}:
         return QuestionPlan("classification")
-    raise ValueError("Question is outside the supported classification/detection/counting/refseg forms")
+    raise AdapterFailure("unsupported_question_form", "Question is outside the supported classification/detection/counting/refseg forms")
 
 
 def _constrained_candidates(request: dict[str, Any]) -> list[tuple[str, str]]:
@@ -230,13 +270,13 @@ class HFSAAdapter:
 
     def _target(self, text: str) -> str:
         if not text.strip():
-            raise ValueError("Missing target description")
+            raise AdapterFailure("missing_target", "Missing target description")
         simple = _TARGET_LOOKUP.get(normalize_label(text))
         if simple:
             return simple
         translated, _ = self.translate_prompt(text)
         if not translated.strip():
-            raise ValueError("Missing target description")
+            raise AdapterFailure("missing_target", "Missing target description")
         return translated
 
     @staticmethod
@@ -249,7 +289,7 @@ class HFSAAdapter:
             if re.search(r"(?<!\w)" + re.escape(alias) + r"(?!\w)", normalized)
         }
         if len(labels) != 1:
-            raise ValueError("Detection/counting require one supported concrete target category")
+            raise AdapterFailure("unsupported_target_category", "Detection/counting require one supported concrete target category")
 
     def _scene(self, request: dict[str, Any], image: Path) -> str:
         kind = request["response_constraint"]["type"]
@@ -259,9 +299,9 @@ class HFSAAdapter:
         mapped = [(key, _SCENE_LOOKUP.get(normalize_label(text))) for key, text in candidates]
         available = set(self.classification.class_names)
         if any(label is None or label not in available for _, label in mapped):
-            raise ValueError("Scene options include a class unsupported by the checkpoint")
+            raise AdapterFailure("unsupported_scene_options", "Scene options include a class unsupported by the checkpoint")
         if len({label for _, label in mapped}) != len(mapped):
-            raise ValueError("Scene options map ambiguously to the same class")
+            raise AdapterFailure("ambiguous_scene_options", "Scene options map ambiguously to the same class")
         predictions = self.classification.predict(image, topk=len(available))["predictions"]
         scores = {row["class_name"]: row["probability"] for row in predictions}
         return max(mapped, key=lambda item: scores[item[1]])[0]
@@ -272,7 +312,7 @@ class HFSAAdapter:
         constraint = request["response_constraint"]
         if constraint["type"] in {"integer", "short_text"}:
             if count < constraint.get("minimum", 0):
-                raise ValueError("Predicted count violates the answer minimum")
+                raise AdapterFailure("count_below_minimum", "Predicted count violates the answer minimum")
             return answer
         matches = []
         for key, value in _constrained_candidates(request):
@@ -280,7 +320,7 @@ class HFSAAdapter:
             if numeric and int(numeric.group(1)) == count:
                 matches.append(key)
         if len(matches) != 1:
-            raise ValueError("Predicted count has no unique matching answer option")
+            raise AdapterFailure("count_option_unmatched", "Predicted count has no unique matching answer option")
         return matches[0]
 
     @staticmethod
@@ -290,17 +330,28 @@ class HFSAAdapter:
         yes, no = {"yes", "true", "是", "有", "存在"}, {"no", "false", "否", "无", "没有", "不存在"}
         candidates = _constrained_candidates(request)
         if any(normalize_label(text) not in yes | no for _, text in candidates):
-            raise ValueError("Presence options must express Yes/No")
+            raise AdapterFailure("unsupported_presence_options", "Presence options must express Yes/No")
         matches = [key for key, text in candidates if normalize_label(text) in (yes if found else no)]
         if len(matches) != 1:
-            raise ValueError("No unique Yes/No option for the model result")
+            raise AdapterFailure("ambiguous_presence_options", "No unique Yes/No option for the model result")
         return matches[0]
 
     def predict(self, request: dict[str, Any], image_paths: list[Path]) -> str | list[int]:
-        if len(image_paths) != 1:
-            raise ValueError("HFSA API currently supports one image; two-image change/VQA tasks are unsupported")
-        plan = parse_question(request)
-        image = image_paths[0]
+        started = time.monotonic()
+        plan = None
+        try:
+            if len(image_paths) != 1:
+                raise AdapterFailure("unsupported_image_count", "HFSA API currently supports one image; two-image change/VQA tasks are unsupported")
+            plan = parse_question(request)
+            answer = self._predict_plan(request, image_paths[0], plan)
+        except Exception as error:
+            _prediction_diagnostic(request, len(image_paths), plan, started, error)
+            raise
+        _prediction_diagnostic(request, len(image_paths), plan, started)
+        return answer
+
+    def _predict_plan(self, request: dict[str, Any], image: Path,
+                      plan: QuestionPlan) -> str | list[int]:
         if plan.task == "classification":
             return self._scene(request, image)
         target = self._target(plan.target)
@@ -317,21 +368,21 @@ class HFSAAdapter:
         if plan.task == "refseg":
             result = self.refseg.predict(image, target)
             if result.mask.shape != (height, width):
-                raise ValueError("Request dimensions differ from the original image")
+                raise AdapterFailure("image_dimensions_mismatch", "Request dimensions differ from the original image")
             ys, xs = result.mask.nonzero()
             if len(xs) == 0:
-                raise ValueError("RefSeg did not find the target")
+                raise AdapterFailure("empty_refseg_mask", "RefSeg did not find the target")
             return [int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1]
         result = self.detection.predict(image, target)
         if result.original_size != (height, width):
-            raise ValueError("Request dimensions differ from the original image")
+            raise AdapterFailure("image_dimensions_mismatch", "Request dimensions differ from the original image")
         if not result.detection_count:
-            raise ValueError("Detector did not find the target")
+            raise AdapterFailure("empty_detections", "Detector did not find the target")
         box = result.boxes[int(result.scores.argmax())]
         if not all(math.isfinite(float(value)) for value in box):
-            raise ValueError("Detector returned non-finite coordinates")
+            raise AdapterFailure("non_finite_bbox", "Detector returned non-finite coordinates")
         answer = [max(0, math.floor(float(box[0]))), max(0, math.floor(float(box[1]))),
                   min(width, math.ceil(float(box[2]))), min(height, math.ceil(float(box[3])))]
         if answer[0] >= answer[2] or answer[1] >= answer[3]:
-            raise ValueError("Detector returned an empty bbox")
+            raise AdapterFailure("empty_bbox", "Detector returned an empty bbox")
         return answer
