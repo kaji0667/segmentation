@@ -1,5 +1,16 @@
 # CURRENT_STATE.md
 
+## 2026-10-09 最新状态：ngrok 公网 HTTPS 与真实预测已验证
+
+- 用户在自己的 WSL 终端以 real 模式启动了四任务 API，监听 `127.0.0.1:9001`，dataset_id 为 `rsu-dev100-v2`。已实际核验带鉴权 healthz 返回200/ready；Windows 也能经 localhost 转发访问该接口，未带 Key 返回401。用户的 API 进程保持运行。
+- 用户同意继续公网接入，最终明确选择 ngrok。Windows 官方 agent 已安装至 `%LOCALAPPDATA%/HFSA/PublicAPI/ngrok.exe`，版本3.39.11，ngrok Inc. 的 Authenticode 签名有效；没有安装或修改 Python 模型依赖。
+- 用户已提供 ngrok 账号令牌，仅保存到 ngrok 自身的 `%LOCALAPPDATA%/ngrok/ngrok.yml`，官方 config check 通过。agent 在 Windows 后台运行（本轮 PID18848），使用 `--inspect=false`、info日志，映射 `http://127.0.0.1:9001`。当前实际 origin 为 `https://clunky-obsessed-grumpily.ngrok-free.dev`，本机 agent API 已核验映射正确。
+- Windows 客户端经上述真实 HTTPS origin 完成外层访问：无鉴权 healthz返回401/json；使用当前模型Key返回200/ready/2.0/rsu-dev100-v2。官方包内一张256×256图的合成题干返回分类 `chimney`、飞机计数 `"0"`、飞机有无 `"No"`，均200/json且协议与ID回显正确。检查未添加 ngrok 跳过提示头，没有以占位答案或官方泛 anything checker 代替真实预测。
+- 前一次按用户提到的旧 Cloudflare 工具尝试 Quick Tunnel，虽生成临时地址，但到 Edge 的 TCP/TLS 连接失败，公网 health 返回530/1033；用户改选 ngrok后，已核验停止本轮 Cloudflare 进程。不能把旧临时地址当作可用端点。
+- WSL 本轮出现外网 DNS 解析失败，但 Windows 能下载官方工具并访问本机9001，故本轮使用 Windows 隧道 agent。没有变更系统代理、TUN、WSL DNS 或防火墙。
+- 本次只验证公网服务链路，没有官方准确率、跨第二网络独立检查或网站评测结果。用户的 WSL API及后台ngrok继续运行；停止API、关闭WSL/电脑或停止agent会影响访问，重启后须重核origin与health。
+- 不把 MODEL_API_KEY 或 ngrok Authtoken 写入项目文档、源码或 Git。ngrok 的账户令牌与本机模型 API Key 各自用于对应接口。下一步官网登记上述HTTPS origin与原模型Key，再由用户发起8题smoke；尚未登记或消耗网站评测次数。
+
 ## 2026-10-09 最新状态：官方 API 已接入四任务并通过真实本机检查
 
 - 当前入口为 `提交/HFSA-main/participant_api_starter-main/`，正式权重位于同级 `提交/HFSA_models/`。`model_adapter.py::RealModel` 委托新 `hfsa_adapter.py`，复用已有场景分类、检测、计数和 RefSeg Predictor；主模块外只调整这一薄入口及文档/测试。

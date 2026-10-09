@@ -268,3 +268,10 @@ This is a bounded visualization/reporting path. It does not alter dataloader ord
 All four checkpoints load before the HTTP listener starts. Detection and counting share the existing global-text `TextPromptEncoder` through their supported factory injection hook; RefSeg keeps its independent token encoder. Checkpoints resolve under sibling `HFSA_models/`, overridable by `HFSA_MODELS_DIR`; device is `HFSA_API_DEVICE` (`auto` by default). Classification and RefSeg YAML paths are resolved from the delivery code directory, avoiding stale checkpoint path metadata.
 
 This explicit official-protocol exception does not change the Web's manual task selection or lazy initialization. Backbone, Neck, task Heads, OpenCLIP implementation, training and evaluation remain untouched. Counting keeps the existing positive-query deployment policy and does not add spatial counting. Scene candidates must map unambiguously to the checkpoint class list. See ADR-0035 and the API README for supported question examples and local-only startup.
+
+
+## 2026-10-09 Verified ngrok HTTPS Ingress
+
+The user subsequently authorized public ingress and selected ngrok. A signature-verified Windows ngrok 3.39.11 agent forwards HTTPS traffic to `http://127.0.0.1:9001`, which Windows can reach through this computer's existing WSL localhost forwarding. This measured route allows the agent to run on Windows while the four-model API stays in its WSL environment; system proxy, TUN, DNS and firewall settings were not changed.
+
+The agent runs with HTTP inspection disabled and info logging. Its account authtoken lives only in the native user configuration outside the repository. The official model API still checks its separate Bearer key on health and prediction; no model credential is added to the public URL. Real HTTPS health and scene/count/presence calls succeeded without a special ngrok bypass header. The current runtime origin and restart requirements are recorded in CURRENT_STATE, not assumed constant. No official evaluation was submitted.

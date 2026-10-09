@@ -335,3 +335,15 @@
 - 更新 ADR-0035、规则、当前状态、架构、实验记录及 README。Git 历史保留，独立发布工作区 api发布_20261009/ 基于 f442ab1；不重建根目录 Git。由于历史缺少部署 Predictor，发布需同步必要的已有接口，实际推送结果另行记录。
 
 - Git 发布结果：源码提交 `747723a` 已成功 push 到 `origin/codex/hfsa-official-api-20261009`，完整 hash=747723ac14c3a5767f393d35ae37d4b039efd441。Git 历史备份工作区源码仍干净，活动根目录未重新初始化；远端 main 未合并此分支。后续本机使用交付目录中的 real 入口即可。
+
+
+### 92. 2026-10-09 本机服务运行与 ngrok 准备
+
+- 用户已启动四任务 real API，实际 healthz200/ready、rsu-dev100-v2；本机API保持运行，Windows可访问WSL9001。
+- 旧 Cloudflare Quick Tunnel 生成过临时URL，但TCP/TLS连接失败，公网返回530/1033，最终用户改选ngrok；本轮Cloudflare进程已停止，不能继续使用旧地址。
+- 安装官方 Windows ngrok3.39.11至用户AppData/Local/HFSA/PublicAPI，签名有效。用户ngrok配置尚不存在，等待本人登录/注册、在本机隐藏输入Authtoken。尚无可用ngrok公网地址，没有登记端点或跑官网评测。
+- 未修改模型/API业务代码、系统代理、TUN或WSLDNS；更新当前状态及API说明。保持模型服务运行，账号令牌只存ngrok自己的本机配置，Key/令牌不得纳入Git。
+
+- 后续用户已提供ngrok令牌并完成原生账号配置；Windows后台agent（本轮PID18848）生成 `https://clunky-obsessed-grumpily.ngrok-free.dev`，关闭HTTP inspection，映射WSL9001。
+- 真实公网HTTPS无Key返回401，模型Key鉴权health返回200/ready/正确dataset_id；官方包256×256图的合成分类/计数/有无题分别返回chimney/0/No，均200/json及正确协议/ID回显，没有专用ngrok跳过头。没有网站提交或准确率结论。
+- 更新当前状态、架构和README。用户API及ngrok继续运行；下一步官网登记origin及原模型Key，先8题smoke。原“等待令牌”状态已被该完成记录覆盖，Cloudflare旧地址不可使用。

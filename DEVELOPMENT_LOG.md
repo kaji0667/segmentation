@@ -1156,3 +1156,21 @@ Follow-up interface review:
 - 发布副本补齐历史 main 缺失的当前分类/检测/计数 Predictor，并同步此前已存在的分类 BatchNorm 数值兼容设置及中文“操场”别名；这是已有本地实现的发布前置，不是在本轮重新设计模型。发布副本的额外检测/计数推理测试 3/3 通过。
 - 独立发布副本再次完成真实四任务 HTTP smoke：startup 120.96s，五项答案与交付副本完全一致，峰值 allocated 仍为3.86 GiB；因此已验证 GitHub 待发布文件及其必要依赖能运行。本轮不合并无关 Web/训练整理或历史资料清理变更。
 - Git 发布结果：源码提交 `747723a` 已成功 push 到 `origin/codex/hfsa-official-api-20261009`，完整 hash=747723ac14c3a5767f393d35ae37d4b039efd441。Git 历史备份工作区源码仍干净，活动根目录未重新初始化；远端 main 未合并此分支。后续本机使用交付目录中的 real 入口即可。
+
+
+## 2026-10-09 用户本机常驻 API 与 ngrok 接入准备
+
+- 用户按 WSL 命令启动四任务 real API，显示 API listening / rsu-dev100-v2；实际鉴权健康检查200/ready。本机服务保留运行，Windows访问其 localhost:9001 未认证得到401，验证了 Windows 到 WSL 的转发路径。
+- 最初按 API README 检查 ngrok，用户提到旧 Cloudflare 工具，遂核验并使用历史备份中的签名有效 cloudflared 2026.8.2。Windows Quick Tunnel 生成地址，但 precheck TCP/UDP 失败、TLS handshake EOF，实际公网返回530/error1033；未登记或声称公网可用。
+- 用户随后明确要求使用 ngrok。已停止本轮 Cloudflare PID43596，并再次通过 Win32_Process 查询确认不存在对应进程；没有停止用户的 API。
+- 从 ngrok 官方 Windows 下载页读取 https://bin.ngrok.com 的安装包链接，下载并安装到用户 AppData/Local/HFSA/PublicAPI；Authenticode 有效、签名者 ngrok Inc.，version3.39.11。官方 config check 表明用户默认配置尚不存在；账号 Authtoken 未配置，隧道还未启动。
+- WSL外网DNS解析失败；Windows网页下载可用且能访问 WSL9001，因此选择 Windows agent。没有更改系统代理/TUN/DNS/防火墙，也没有改模型代码或依赖。准备本机隐藏令牌输入命令，待用户账号授权后继续公网 HTTP 验证；不要求将 ngrok令牌发到聊天。
+- 更新当前状态和 API README 第9节。ngrok/Cloudflare二进制及日志位于用户AppData或既有历史备份，不纳入Git；项目文档不记录模型Key或账号令牌。尚未提交网站评测。
+
+### ngrok账号配置及公网真实预测完成
+
+- 用户提供账号Authtoken，已通过官方 `config add-authtoken` 保存至ngrok本机用户配置，`config check`通过；令牌未写入项目文件或Git，未在结果中回显。启动Windows后台ngrok（PID18848）映射 localhost:9001，关闭HTTP inspection，采用info日志。
+- agent第一次解析connect.ngrok-agent.com时超时，自动重试随后建立session并创建 `https://clunky-obsessed-grumpily.ngrok-free.dev`；本机4040/api/tunnels确认origin和9001映射。没有改变系统代理、TUN、DNS或防火墙。
+- Windows Python标准HTTPS客户端访问该域名，未添加跳过ngrok提示页的特殊请求头。无Key的healthz：401/json（0.45秒）；携带当前APIKey：200/json，ready/2.0/rsu-dev100-v2（0.35秒）。模型Key只在检查进程内使用，不输出或落盘。
+- 使用当前官方包内256×256资产的独立合成题（非官方题目/金标）：场景短文本 `chimney`（200，2.14秒）；飞机计数 `"0"`（200，1.05秒）；飞机有无 `"No"`（200，0.44秒）。检查协议、请求/item ID、JSON类型和约束均通过，未使用Demo或官方泛anything checker。
+- 这证明真实公网HTTPS入口和支持的模型请求能工作，不能作为官方得分或跨第二网络的独立验证。保留用户WSL模型服务及后台agent运行，Cloudflare已停止。下一步用户将origin和原模型Key填官网并发起8题smoke；本轮未登记网站端点或提交评测。

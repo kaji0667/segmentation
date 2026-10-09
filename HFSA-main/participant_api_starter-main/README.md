@@ -237,4 +237,25 @@ python tests/smoke_hfsa_real.py \
   --target windmill --refseg-question 'The gray small windmill'
 ```
 
-真实 smoke 用用户提供的单张图创建临时合成图片包，只监听随机本机端口，并检查四任务、鉴权、健康检查、标识回显、像素框和双图拒绝；完成后关闭服务并删除临时包。它不改官方图片包、不打印测试 Key，也不提交网站评测。公网部署继续暂缓。
+真实 smoke 用用户提供的单张图创建临时合成图片包，只监听随机本机端口，并检查四任务、鉴权、健康检查、标识回显、像素框和双图拒绝；完成后关闭服务并删除临时包。它不改官方图片包、不打印测试 Key，也不提交网站评测。后续公网接入状态见第9节。
+
+## 9. 当前电脑的 Windows ngrok 接入准备（2026-10-09）
+
+用户随后决定继续公网接入，并选择 ngrok。已将官方 Windows agent 安装在 `%LOCALAPPDATA%\HFSA\PublicAPI\ngrok.exe`，签名有效，版本3.39.11。Windows 已核验能访问 WSL 的 `127.0.0.1:9001`，所以这台电脑可从 Windows 启动隧道。保持原 WSL 模型服务运行。
+
+先在 [ngrok 令牌页面](https://dashboard.ngrok.com/get-started/your-authtoken) 登录或注册，复制 Authtoken。它用于 ngrok 账号连接；官网评测仍填写自己的 MODEL_API_KEY。在 **Windows PowerShell** 隐藏输入 ngrok 令牌并保存到 ngrok 自身的用户配置：
+
+```powershell
+$ngrokToken = Read-Host '粘贴 ngrok Authtoken' -AsSecureString
+& "$env:LOCALAPPDATA\HFSA\PublicAPI\ngrok.exe" config add-authtoken ([System.Net.NetworkCredential]::new('', $ngrokToken).Password)
+```
+
+该命令只把账号令牌保存到 ngrok 的本机用户配置，不写项目文件。后续需要重新启动时执行（当前本轮已由助手在后台启动，无需再启动一个）：
+
+```powershell
+& "$env:LOCALAPPDATA\HFSA\PublicAPI\ngrok.exe" http http://127.0.0.1:9001 --inspect=false
+```
+
+使用 agent 实际显示的 HTTPS origin，并先验证认证 healthz 及本适配器支持的真实预测。本轮ngrok账号配置及公网验证已完成：无Key的healthz返回401，携带当前模型Key返回200/ready/正确dataset_id；分类、计数和目标有无合成题均由真实模型返回200/json及正确ID回显，未加ngrok专用跳过提示头。当前origin见项目 CURRENT_STATE；重启agent后应重新确认地址。先前 Cloudflare Quick Tunnel 因到 Edge 的TLS连接失败而未通，并已停止。
+
+官网Endpoint填写HTTPS根地址，模型API Key填写此前用于启动模型服务的Key；ngrok Authtoken已用于agent账号配置。保持WSL模型终端、后台ngrok和电脑运行。先由用户在官网跑8题smoke，检查缺失预测/超时后再考虑完整开发集。本轮没有提交官网评测。
