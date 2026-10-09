@@ -280,3 +280,9 @@ $ngrokToken = Read-Host '粘贴 ngrok Authtoken' -AsSecureString
 使用 agent 实际显示的 HTTPS origin，并先验证认证 healthz 及本适配器支持的真实预测。本轮ngrok账号配置及公网验证已完成：无Key的healthz返回401，携带当前模型Key返回200/ready/正确dataset_id；分类、计数和目标有无合成题均由真实模型返回200/json及正确ID回显，未加ngrok专用跳过提示头。当前origin见项目 CURRENT_STATE；重启agent后应重新确认地址。先前 Cloudflare Quick Tunnel 因到 Edge 的TLS连接失败而未通，并已停止。
 
 官网Endpoint填写HTTPS根地址，模型API Key填写此前用于启动模型服务的Key；ngrok Authtoken已用于agent账号配置。保持WSL模型终端、后台ngrok和电脑运行。先由用户在官网跑8题smoke，检查缺失预测/超时后再考虑完整开发集。本轮没有提交官网评测。
+
+## 10. 真实题定位包装修复与能力补充评估（2026-10-09）
+
+明确的bounding box指令若带Description字段，Adapter先提取非空完整描述，保留多句关系与颜色/方位，再交给既有RefSeg。合成测试与两条真实请求的完整描述解析均通过；当前后台尚未重启到此次修复，尚无真实bbox/IoU或新官网得分结论。
+
+已有四个专用模型仍存在通用视觉问答、未知类别有无、颜色、条件计数和双图变化的能力缺口。用户要求解决零分，因此已评估另接小型视觉语言模型的方案，详见项目Proposed ADR-0036；尚未下载/安装/上线，不能通过放开门禁或默认填值声称具有新能力。当前8GB显卡约1.6GB余量，不可照抄官方4B全BF16与四任务共驻；需要独立环境和经过实测的量化/互斥驻留策略。

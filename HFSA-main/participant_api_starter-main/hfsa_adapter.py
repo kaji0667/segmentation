@@ -199,6 +199,16 @@ def _match_target(text: str, patterns: tuple[str, ...]) -> str | None:
 
 def parse_question(request: dict[str, Any]) -> QuestionPlan:
     kind = request["response_constraint"]["type"]
+    if kind == "bbox":
+        # Protocol wrappers describe the output before the referring expression.
+        # Extract before stripping answer instructions, which may precede it.
+        parts = re.split(r"\bdescription\s*:\s*", request["question"], maxsplit=1, flags=re.I)
+        if (len(parts) == 2 and re.search(r"\bbounding\s+box\b", parts[0], re.I)
+                and re.search(r"\b(?:identify|locate|find|draw|return|provide|give|predict)\b", parts[0], re.I)):
+            target = _question_text(parts[1])
+            if not target:
+                raise AdapterFailure("missing_target", "Missing target description")
+            return QuestionPlan("refseg", target)
     text = _question_text(request["question"])
     if not text or request["response_constraint"].get("question_form") == "change_region":
         raise AdapterFailure("unsupported_change_region_or_empty_question", "Unsupported empty question or change-region task")

@@ -283,3 +283,7 @@ The HFSA adapter emits one bounded JSON diagnostic per prediction to local stder
 ## 2026-10-09 Optional Private Request Replay
 
 HFSA_API_REPLAY_DIR optionally saves a whitelisted protocol request before routing/inference to a private directory outside the project. It is off by default. Credentials, unrecognized metadata and model/gold answers are excluded; diagnostic logs still omit question text. Content hashes deduplicate requests, and a capture error never changes inference. replay_requests.py sends the captured requests sequentially to loopback HTTP only, bypasses proxies, refuses public endpoints and does not follow redirects. It checks response identifiers and answer constraints, reports no accuracy and never creates an evaluator run. This supports debugging a received request repeatedly without spending further website quota. Requests from the original uncaptured smoke cannot be recovered from audit hashes.
+
+## 2026-10-09 Bbox Wrapper Parsing and Proposed VLM Complement
+
+The official HFSA adapter extracts a nonempty Description from an explicit bounding-box instruction before stripping answer-format instructions. It preserves the full referring expression and calls the existing RefSeg Predictor; no model internals change. Both captured grounding requests now parse to RefSeg; real inference and IoU are still unverified because the active process has not been restarted. General VQA and dual-image capability expansion is a separate proposed design in ADR-0036, not an implemented backend.

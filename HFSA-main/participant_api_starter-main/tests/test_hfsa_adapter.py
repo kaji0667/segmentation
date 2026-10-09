@@ -54,6 +54,27 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(parse_question(request("Is there a ship in the image? Answer Yes or No.", "enum")).target, "ship")
         self.assertEqual(parse_question(request("Which scene category best describes the image?", "single_choice")).task, "classification")
 
+    def test_bbox_wrapper_preserves_complete_description(self):
+        description = "The small red warehouse at the bottom right. Above it is a road."
+        for prefix in (
+            "Given a satellite image, identify the bounding box in pixel coordinates. Description: ",
+            "Return the bounding box. Please answer with coordinates only.\nDESCRIPTION: ",
+        ):
+            plan = parse_question(request(prefix + description, "bbox"))
+            self.assertEqual((plan.task, plan.target), ("refseg", description.rstrip(".")))
+
+    def test_bbox_wrapper_without_target_or_with_unrelated_task_fails(self):
+        with self.assertRaises(AdapterFailure) as context:
+            parse_question(request("Return the bounding box. Description: ", "bbox"))
+        self.assertEqual(context.exception.code, "missing_target")
+        with self.assertRaises(AdapterFailure):
+            parse_question(request("What color is it? Description: the roof", "bbox"))
+        with self.assertRaises(AdapterFailure):
+            parse_question(request("What color is the bounding box? Description: the roof", "bbox"))
+        with self.assertRaises(AdapterFailure):
+            parse_question(request("Return the bounding box. Description: a warehouse", "short_text"))
+
+
     def test_unsupported_semantics_do_not_fall_back(self):
         cases = [
             request("Describe the image."), request("What is the area?", "integer"),
@@ -142,6 +163,15 @@ class AdapterTests(unittest.TestCase):
         self.refseg.predict.return_value.mask[:] = False
         with self.assertRaises(ValueError):
             self.predict(value)
+
+    def test_wrapped_refseg_request_calls_model_with_full_description(self):
+        description = "The red warehouse at the lower left. To its right is a road"
+        value = request("Identify the bounding box. Answer with coordinates only. Description: " + description,
+                        "bbox", image_width=80, image_height=40)
+        self.assertEqual(self.predict(value), [20, 10, 24, 16])
+        self.refseg.predict.assert_called_once_with(self.image, description)
+        self.detection.predict.assert_not_called()
+
 
     def test_detection_uses_highest_confidence_native_box_and_dimensions(self):
         value = request("Detect a ship.", "bbox", image_width=80, image_height=40)
