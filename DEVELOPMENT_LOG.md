@@ -1155,3 +1155,4 @@ Follow-up interface review:
 
 - 发布副本补齐历史 main 缺失的当前分类/检测/计数 Predictor，并同步此前已存在的分类 BatchNorm 数值兼容设置及中文“操场”别名；这是已有本地实现的发布前置，不是在本轮重新设计模型。发布副本的额外检测/计数推理测试 3/3 通过。
 - 独立发布副本再次完成真实四任务 HTTP smoke：startup 120.96s，五项答案与交付副本完全一致，峰值 allocated 仍为3.86 GiB；因此已验证 GitHub 待发布文件及其必要依赖能运行。本轮不合并无关 Web/训练整理或历史资料清理变更。
+- Git 发布结果：源码提交 `747723a` 已成功 push 到 `origin/codex/hfsa-official-api-20261009`，完整 hash=747723ac14c3a5767f393d35ae37d4b039efd441。Git 历史备份工作区源码仍干净，活动根目录未重新初始化；远端 main 未合并此分支。后续本机使用交付目录中的 real 入口即可。
