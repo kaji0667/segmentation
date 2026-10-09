@@ -1174,3 +1174,10 @@ Follow-up interface review:
 - Windows Python标准HTTPS客户端访问该域名，未添加跳过ngrok提示页的特殊请求头。无Key的healthz：401/json（0.45秒）；携带当前APIKey：200/json，ready/2.0/rsu-dev100-v2（0.35秒）。模型Key只在检查进程内使用，不输出或落盘。
 - 使用当前官方包内256×256资产的独立合成题（非官方题目/金标）：场景短文本 `chimney`（200，2.14秒）；飞机计数 `"0"`（200，1.05秒）；飞机有无 `"No"`（200，0.44秒）。检查协议、请求/item ID、JSON类型和约束均通过，未使用Demo或官方泛anything checker。
 - 这证明真实公网HTTPS入口和支持的模型请求能工作，不能作为官方得分或跨第二网络的独立验证。保留用户WSL模型服务及后台agent运行，Cloudflare已停止。下一步用户将origin和原模型Key填官网并发起8题smoke；本轮未登记网站端点或提交评测。
+
+## 2026-10-09 官网 preflight http_error 排查
+
+- 用户报告预检HTTP错误；ngrok仍在线，日志有官网服务器到本机API的连接，但inspection关闭，无该请求的响应码证据。
+- 仅在检查进程内存读取现有API的MODEL_API_KEY：86字符，无空白，两个43字符半段完全相同。实际值的本机和公网healthz均200/ready；单个43字符半段的公网healthz为401/unauthorized。请求头及密钥值未输出、落盘或纳入Git。
+- Python标准API客户端不加ngrok专用头也收到200/JSON。PowerShell默认User-Agent另收到ERR_NGROK_6024提示，不能混为官网预检响应。
+- 建议先将官网模型Key与运行服务的实际值对齐、核对origin后由用户重试。可控浏览器官网未登录，未检查用户原填写值、未触发网站评测，尚无官网预检成功结论；没有修改代码或放宽认证。

@@ -1,5 +1,12 @@
 # CURRENT_STATE.md
 
+## 2026-10-09 当前排错：官网预检失败与运行密钥重复粘贴
+
+- 用户报告官网 `invalid_submission / participant preflight failed (http_error)`。ngrok 仍在线，日志有评测服务器到本机9001的连接；关闭了 HTTP inspection，尚未观察官网该次请求的实际响应码，不能直接断言官网收到401。
+- 只在内存中核对正在运行的 WSL API：MODEL_MODE=real，模型密钥实际为86字符，两个43字符半段完全相同且无空白。使用实际86字符值访问本机及公网 healthz 均200/ready/2.0/rsu-dev100-v2；只用单个43字符半段访问公网明确返回401/unauthorized。密钥值没有打印或写入项目。
+- 下一步让用户核对官网：Endpoint 为当前 ngrok origin，无路径及末尾斜杠；模型 API Key 必须与服务启动时的实际值完全一致。维持当前进程时需将此前43字符模型密钥连续输入两遍，无空格或 Bearer 前缀。若日后改回单遍，须重启模型服务并同步网站；这不是要求长期使用重复密钥。
+- 本轮未修改业务代码、认证规则或隧道，也未发起网站评测。当前可控浏览器中的官网未登录，尚不能核对用户原填写值或确认预检已通过。Python API 客户端无 ngrok 专用头仍返回JSON；PowerShell默认请求另会遇到ngrok浏览器提示，不能把该提示当作官网此次失败证据。
+
 ## 2026-10-09 最新状态：ngrok 公网 HTTPS 与真实预测已验证
 
 - 用户在自己的 WSL 终端以 real 模式启动了四任务 API，监听 `127.0.0.1:9001`，dataset_id 为 `rsu-dev100-v2`。已实际核验带鉴权 healthz 返回200/ready；Windows 也能经 localhost 转发访问该接口，未带 Key 返回401。用户的 API 进程保持运行。

@@ -347,3 +347,9 @@
 - 后续用户已提供ngrok令牌并完成原生账号配置；Windows后台agent（本轮PID18848）生成 `https://clunky-obsessed-grumpily.ngrok-free.dev`，关闭HTTP inspection，映射WSL9001。
 - 真实公网HTTPS无Key返回401，模型Key鉴权health返回200/ready/正确dataset_id；官方包256×256图的合成分类/计数/有无题分别返回chimney/0/No，均200/json及正确协议/ID回显，没有专用ngrok跳过头。没有网站提交或准确率结论。
 - 更新当前状态、架构和README。用户API及ngrok继续运行；下一步官网登记origin及原模型Key，先8题smoke。原“等待令牌”状态已被该完成记录覆盖，Cloudflare旧地址不可使用。
+
+### 93. 2026-10-09 官网预检HTTP错误与重复密钥诊断
+
+- 官网预检失败后复核现有服务，确认实际运行模型Key为86字符，由同一个43字符值重复两次组成。实际值访问公网healthz为200/ready，单遍值为401/unauthorized；未记录真实密钥。
+- ngrok在线且曾接到官网服务器连接，但没有官网原请求的响应码；可控官网页面未登录，不能声称已核对原字段或完成网站评测。
+- 下一步先对齐网站模型Key与当前服务的实际值及正确origin，再由用户重试。未修改模型/API实现、认证或隧道；只追加当前状态与排查证据，保留现有进程。
