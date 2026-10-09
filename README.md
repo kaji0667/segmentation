@@ -108,3 +108,8 @@ non-P2 + frozen backbone + mask-area small-target loss weight 1.5 + wide validat
 ```
 
 Current unresolved issues include validation overfitting, local mask over-segmentation, incomplete thin-object masks, and weak small-object or complex-class samples.
+
+
+## 官方四任务 API（2026-10-09）
+
+官方协议 2.0 的本地 API 已接入现有分类、检测、计数与 RefSeg。安装和启动说明见 [API README](HFSA-main/participant_api_starter-main/README.md#8-本地-hfsa-四任务接入2026-10-09)。需要独立准备 HFSA_models 权重目录和官方图片包；此提交不包含权重、数据或凭据。

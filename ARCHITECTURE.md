@@ -259,3 +259,12 @@ scripts/train_<task>.sh or scripts/test_<task>.sh
 The referring-segmentation evaluator keeps one metric pass and the frozen validation threshold, but may now retain CPU copies of the first configured test batches for qualitative output. `--test-preview-batches` defaults to `5`; the task scripts expose the same setting as `TEST_PREVIEW_BATCHES`. Files are named `test_batch0_pred.jpg`, `test_batch1_pred.jpg`, and so on in the evaluation `SAVE_DIR`.
 
 This is a bounded visualization/reporting path. It does not alter dataloader order, logits, threshold selection, confusion matrices, oIoU/mIoU/Pr metrics, checkpoint selection, or model state. Validation previews remain one `val_batch0_pred_epoch<N>.jpg` per epoch.
+
+
+## 2026-10-09 Four-Task Official-Protocol Adapter (supersedes RefSeg-only scope)
+
+`participant_api_starter-main/hfsa_adapter.py` is the new primary adapter module. `RealModel` delegates construction and prediction. It parses a bounded set of question forms together with response constraints, calls existing task-owned Predictors, then formats scene choice identifiers/exact enum aliases, numeric strings, target-presence Yes/No, native detection boxes or RefSeg mask enclosing boxes. Unsupported semantics raise errors handled by the unchanged official server. Two-image requests fail before any model is called.
+
+All four checkpoints load before the HTTP listener starts. Detection and counting share the existing global-text `TextPromptEncoder` through their supported factory injection hook; RefSeg keeps its independent token encoder. Checkpoints resolve under sibling `HFSA_models/`, overridable by `HFSA_MODELS_DIR`; device is `HFSA_API_DEVICE` (`auto` by default). Classification and RefSeg YAML paths are resolved from the delivery code directory, avoiding stale checkpoint path metadata.
+
+This explicit official-protocol exception does not change the Web's manual task selection or lazy initialization. Backbone, Neck, task Heads, OpenCLIP implementation, training and evaluation remain untouched. Counting keeps the existing positive-query deployment policy and does not add spatial counting. Scene candidates must map unambiguously to the checkpoint class list. See ADR-0035 and the API README for supported question examples and local-only startup.

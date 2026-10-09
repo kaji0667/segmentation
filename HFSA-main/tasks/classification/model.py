@@ -17,6 +17,7 @@ class SceneClassificationNetwork(nn.Module):
         super().__init__()
         self.model_yaml = str(model_yaml)
         self.model = ClassificationModel(self.model_yaml, ch=3, nc=int(num_classes), verbose=False)
+        self.configure_feature_extractor_batchnorm()
         self.device = torch.device(device)
         self.pretrained_report = {"matched_tensors": 0, "skipped_tensors": 0}
         if pretrained_weights:
@@ -33,6 +34,13 @@ class SceneClassificationNetwork(nn.Module):
 
     def forward(self, images):
         return self.model(images)
+
+    def configure_feature_extractor_batchnorm(self):
+        """Match the BatchNorm settings used by the YOLO DetectionModel that trained the frozen features."""
+        for module in self.model.model[:-1].modules():
+            if type(module) is nn.BatchNorm2d:
+                module.eps = 1e-3
+                module.momentum = 0.03
 
     @staticmethod
     def _state_dict_from_checkpoint(checkpoint: Any) -> Dict[str, torch.Tensor]:

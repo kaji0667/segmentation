@@ -31,6 +31,7 @@ _CATEGORY_TRANSLATIONS = (
     ("风力发电机", "windmill"),
     ("铁路火车站", "train station"),
     ("地面田径场", "ground track field"),
+    ("操场", "ground track field"),
     ("棒球场", "baseball field"),
     ("篮球场", "basketball court"),
     ("高尔夫球场", "golf field"),

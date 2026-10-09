@@ -603,3 +603,11 @@ python train_refseg.py --data pre_datasets/RRSIS-D_refseg/data.yaml --text-queri
 - 明确团队统一预训练权重为 `yolov12m.pt`，正式语义分割主线保持匹配的 YOLOv12m 配置；YOLOv12n 只保留为历史轻量对照。
 - 全量审计确认 17,402 条表达中有 3 条 RLE 解码后为空；活动数据加载默认剔除并显式告警，旧协议可通过 `--empty-mask-policy keep` 复现。
 - 保持 axis-aware 翻转与 0.15 亮度/对比度扰动不变；增强概率和 jitter 必须处于 `[0, 1]`。
+
+
+### 2026-10-09 官方协议 2.0 适配边界
+
+- 用户明确要求将已有分类、检测、计数和指代分割接入官方 API。该独立入口没有 `task_id`，允许仅在 `participant_api_starter-main/hfsa_adapter.py` 按明确题干形式及作答约束选择任务；Web 保持 ADR-0026 的手动选择。
+- 官方 Adapter 复用既有任务 Predictor 和正式权重，不修改模型结构、训练、Loss 或原任务评测。单框转换、单选标识与计数字符串只属于作答接口适配。
+- 官方服务在模型全部加载完成后才监听并返回 ready。检测/计数可通过原工厂注入接口共享同配置文本编码器；Web 的延迟加载规则继续有效。
+- 不支持的问法、双图变化、通用问答及超出模型能力的计数条件必须明确失败，不为了通过协议检查编造答案；局部合成 smoke 不能当作完整开发集覆盖或正式成绩。详见 ADR-0035。

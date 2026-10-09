@@ -1139,3 +1139,19 @@ Follow-up interface review:
 - 原 Head 9 条、文本输入 2 条、默认配置 2 条测试全部保留，没有修改运行时代码。
 - 新文件定向 `13/13`、发布仓库全库 CPU `65/65` 通过。
 - 提交 `dbb9d4b test(refseg): consolidate current architecture coverage` 已推送到 GitHub `main`。
+
+
+# 2026-10-09 官方 API 四任务接入与真实 HTTP smoke
+
+- 用户在已有单任务 RefSeg 接入后明确要求“把其他的任务也接入进去”。本轮主模块为 `提交/HFSA-main/participant_api_starter-main/hfsa_adapter.py`，相邻 `model_adapter.py::RealModel` 改为薄委托；官方 server、Demo/Qwen、Web 及模型/训练代码未改。
+- 分类调用 `SceneClassificationPredictor`，以全类别概率映射单选/枚举候选；计数调用独立 `CountingPredictor`；目标有无和显式检测框调用 `TextGuidedDetectionPredictor`；普通指代 bbox 继续调用 RefSeg 并转换原分辨率 mask。目标描述限定词保留，未知/歧义问题明确失败。
+- 启动预加载四任务，检测和计数经既有工厂接口共用同一 TextPromptEncoder。绝对代码 YAML 路径避免权重记录中的旧路径；默认兄弟目录 `HFSA_models`，提供权重根目录和设备环境覆盖。
+- 新增题干/映射/语义拒绝测试及可重复 `tests/smoke_hfsa_real.py`。最终命令：WSL 现有 `hfsa_env/bin/python -m unittest discover -s tests -v`，官方+新增 `25/25`；真实 smoke 以 `--image /mnt/d/code/python/HFSA/HFSA-main/data/RRSIS-D/images/rrsisd/JPEGImages/03600.jpg` 执行。
+- 第一次真实 smoke 的合成请求误带 manifest 的 size 字段，被官方 `verified_path` 正确拒绝为 HTTP422 invalid_image_reference；修正 smoke 请求为仅 asset_id/sha256/mime_type 后通过。没有放宽官方校验或替换模型结果。
+- 成功轮：完整构造 `100.64s`，800×800 图像。场景单选 `U`（checkpoint 第21类 windmill，`1.32s`）；计数 `"1"`（`0.77s`）；指定风车有无 `"Yes"`（`0.11s`）；检测像素框 `[351,272,388,390]`（`0.09s`）；RefSeg `[360,271,387,373]`（`0.11s`）。四任务请求均 HTTP200 且 protocol/request_id/item_id 回显正确。
+- 随机本机端口、随机私有 Key、临时合成包；无 Key 输出/落盘，官方图片包不变。未认证健康请求401，认证 ready 正确；双图问题返回500/inference_failed；模型共享编码器身份断言通过。GPU allocated `3.67 GiB`、peak allocated `3.86 GiB`，无 OOM。测试服务及临时包在 finally 中关闭/清理。
+- 上述为部署链路证据，无完整开发集准确率或官方评分结论。通用问答/双图变化/空间计数和官方 checker 的泛 anything 题仍不支持；公网保持暂缓。新增 ADR-0035，并更新当前状态、项目规则、架构和两份运行 README。
+- 根目录 Git 仍不可用；不重建 Git，保留历史备份源码，使用来自 `f442ab1` 的独立发布工作区/分支处理本次 API 及必要的当前 Predictor 前置文件。远端同步状态以实际 push 结果为准。
+
+- 发布副本补齐历史 main 缺失的当前分类/检测/计数 Predictor，并同步此前已存在的分类 BatchNorm 数值兼容设置及中文“操场”别名；这是已有本地实现的发布前置，不是在本轮重新设计模型。发布副本的额外检测/计数推理测试 3/3 通过。
+- 独立发布副本再次完成真实四任务 HTTP smoke：startup 120.96s，五项答案与交付副本完全一致，峰值 allocated 仍为3.86 GiB；因此已验证 GitHub 待发布文件及其必要依赖能运行。本轮不合并无关 Web/训练整理或历史资料清理变更。
