@@ -44,7 +44,7 @@ _TASKS: tuple[TaskConfig, ...] = (
         title="目标检测",
         technical_name="Text-guided Object Detection",
         description="根据文字描述定位图像中的目标",
-        detail="上传图像并输入目标描述，系统将返回目标位置、置信度和标注结果图。",
+        detail="上传图像并描述一个目标，系统按描述匹配并展示对应的单个目标框。",
         icon="detection",
         accent_color="#9B7CFF",
         action_label="开始检测",
@@ -57,8 +57,8 @@ _TASKS: tuple[TaskConfig, ...] = (
                 key="text",
                 label="需要检测的目标",
                 kind="text",
-                placeholder="例如：airplane、ship、the vehicle on the left",
-                help_text="建议使用与模型训练域一致的英文目标类别或简短描述。",
+                placeholder="例如：左侧的飞机 / the airplane on the left",
+                help_text="一次描述一个目标；支持常见中文类别、方位、颜色和大小，复杂关系请用英文。",
             ),
         ),
         outputs=(
@@ -66,7 +66,7 @@ _TASKS: tuple[TaskConfig, ...] = (
             OutputFieldConfig("scores", "置信度", "scores"),
             OutputFieldConfig("visualization", "标注结果图", "image", downloadable=True),
         ),
-        runtime_defaults={"imgsz": 800, "conf_thres": 0.15, "iou_thres": 0.5, "max_det": 300},
+        runtime_defaults={"imgsz": 800, "conf_thres": 0.25, "iou_thres": 0.7, "max_det": 300},
     ),
     TaskConfig(
         task_id="counting",

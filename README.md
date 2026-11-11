@@ -66,3 +66,11 @@ VQA 已新增从 [BLIP-2 官方源码](https://github.com/salesforce/LAVIS/blob/
 
 
 2026-10-14 正式部署：启动脚本默认 `HFSA_API_PACKAGE_DIR=../../rsu-formal800-v3-images`（相对本工程），可显式覆盖。正式根目录manifest含1000资产，dataset_id为rsu-formal800-v3；正式图片仅做完整性/读取检查，未用于选模。三版旧开发请求比较和登记填写内容在上级提交目录TXT中；正式测试须完成负责人签署登记及组委会核验。
+
+## Web 指代检测（2026-11-11）
+
+“目标检测”输入一张图和一条目标描述，执行原检测测试的phrase-map候选评分与一对一匹配，返回对应的零个或一个目标框。默认800、confidence=.25、NMS IoU=.7、max_det=300（候选上限，不是输出数量）、matching temperature=.7。缺少匹配特征会明确报错，不使用最高检测置信度或首框回退。模型输出为单框并不保证每个描述都识别正确。
+
+支持原有受限中文转译，例如“左侧的飞机”转为the airplane on the left；界面显示转译。复杂关系请使用英文，文本超限不静默截断。本地OpenCLIP资产位于openclip/ViT-L-14.pt；通过任务Adapter按需加载。计数继续原独立权重与全部NMS框，默认800/.15/.5/300，未改成单框。
+
+本地启动：python web_app.py --host 127.0.0.1 --port 7860。服务已运行时，修改源码后需要重启该Web进程并刷新浏览器；官方API为独立服务，本修复不要求重启官方API/Qwen/ngrok。

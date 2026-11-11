@@ -438,6 +438,16 @@ function renderBoxTaskResult(result, taskId) {
   resultStage.innerHTML = "";
   const content = document.createElement("div");
   content.className = "box-task-result";
+  if (!isCounting && summary.prompt_translated && summary.model_prompt) {
+    const translation = document.createElement("div");
+    translation.className = "translation-note";
+    const label = document.createElement("span");
+    const value = document.createElement("strong");
+    label.textContent = "中文描述已转译为";
+    value.textContent = summary.model_prompt;
+    translation.append(label, value);
+    content.appendChild(translation);
+  }
   if (count === 0) {
     const warning = document.createElement("div");
     warning.className = "result-warning";
